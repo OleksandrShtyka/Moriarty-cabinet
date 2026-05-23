@@ -285,6 +285,57 @@ export async function POST(request) {
                 return NextResponse.json({ success: true });
             }
         }
+        else if (action === 'updateAvatar') {
+            const { avatarUrl } = body;
+            if (!avatarUrl) return NextResponse.json({ error: "Ссылка на аватарку пуста" }, { status: 400 });
+            
+            if (supabase) {
+                const { data: profile } = await supabase.from('profiles').select('discord').eq('id', userId).maybeSingle();
+                const discordObj = profile?.discord || {};
+                discordObj.avatar = avatarUrl;
+                
+                const { error } = await supabase.from('profiles').update({ discord: discordObj }).eq('id', userId);
+                if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+                return NextResponse.json({ success: true });
+            } else {
+                const db = getDemoDb();
+                const idx = db.users.findIndex(u => u.id === userId);
+                if (idx === -1) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+                
+                if (!db.users[idx].discord) db.users[idx].discord = {};
+                db.users[idx].discord.avatar = avatarUrl;
+                saveDemoDb(db);
+                return NextResponse.json({ success: true });
+            }
+        }
+        
+        else if (action === 'deleteUser') {
+            if (supabase) {
+                const { data: adminUser } = await supabase.from('profiles').select('role').eq('id', adminUserId).maybeSingle();
+                if (!adminUser || !['OWNER', 'Developer'].includes(adminUser.role)) {
+                    return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
+                }
+                const { error } = await supabase.from('profiles').delete().eq('id', targetUserId);
+                if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+                return NextResponse.json({ success: true });
+            } else {
+                const db = getDemoDb();
+                const adminUser = db.users.find(u => u.id === adminUserId);
+                if (!adminUser || !['OWNER', 'Developer'].includes(adminUser.role)) {
+                    return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
+                }
+                const idx = db.users.findIndex(u => u.id === targetUserId);
+                if (idx === -1) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+                
+                db.users.splice(idx, 1);
+                db.warns = db.warns.filter(w => w.user_id !== targetUserId);
+                db.feedback = db.feedback.filter(f => f.user_id !== targetUserId);
+                db.transactions = db.transactions.filter(t => t.user_id !== targetUserId);
+                
+                saveDemoDb(db);
+                return NextResponse.json({ success: true });
+            }
+        }
         
         return NextResponse.json({ error: "Invalid POST Action" }, { status: 400 });
     } catch (e) {

@@ -1909,3 +1909,93 @@ button, input, select, textarea {
         grid-template-columns: 1fr;
     }
 }
+
+/* ==========================================================================
+   Premium Cyberpunk Toast & Customization System
+   ========================================================================== */
+.toast-container {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.toast-item {
+    pointer-events: auto;
+    background: rgba(10, 8, 12, 0.95);
+    border: 1px solid rgba(205, 162, 66, 0.2);
+    border-radius: 6px;
+    padding: 14px 20px;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.75), var(--shadow-neon);
+    animation: toastSlideIn 0.35s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+    min-width: 300px;
+    max-width: 400px;
+}
+
+.toast-item.success {
+    border-left: 4px solid var(--primary);
+}
+
+.toast-item.error {
+    border-left: 4px solid var(--danger);
+    color: #ff9b9b;
+    border-color: rgba(223, 71, 71, 0.3);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.75), var(--shadow-neon-pink);
+}
+
+.toast-item.info {
+    border-left: 4px solid var(--secondary);
+}
+
+@keyframes toastSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(45px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+
+/* Avatar hover gear overlay */
+.avatar-container-wrap {
+    position: relative;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.avatar-edit-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.65);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: var(--transition-smooth);
+}
+
+.avatar-container-wrap:hover .avatar-edit-overlay {
+    opacity: 1;
+}
+
+.avatar-edit-overlay i {
+    color: var(--primary);
+    font-size: 1.5rem;
+    text-shadow: 0 0 10px var(--primary);
+    animation: rotateSlow 8s linear infinite;
+}
+

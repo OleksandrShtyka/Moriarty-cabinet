@@ -108,7 +108,7 @@ export async function POST(request) {
                 if (matched) {
                     return NextResponse.json({ user: matched });
                 } else {
-                    return NextResponse.json({ error: "Неверный email или пароль! (Пароль демо-аккаунтов совпадает с логином до знака @)" }, { status: 401 });
+                    return NextResponse.json({ error: "Неверный email или пароль!" }, { status: 401 });
                 }
             }
         } else if (action === 'register') {

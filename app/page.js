@@ -15,10 +15,11 @@ export default function Home() {
     const [staticId, setStaticId] = useState('');
     const [referral, setReferral] = useState('');
     
-    // UI Helpers
+    // UI Helpers & TOAST SYSTEM
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [toasts, setToasts] = useState([]);
     
     // Reactive Cabinet Data States
     const [profile, setProfile] = useState(null);
@@ -64,6 +65,8 @@ export default function Home() {
     // Modals
     const [showDepositModal, setShowDepositModal] = useState(false);
     const [showTransferModal, setShowTransferModal] = useState(false);
+    const [showAvatarModal, setShowAvatarModal] = useState(false);
+    const [customAvatarUrl, setCustomAvatarUrl] = useState('');
     
     // Admin Section States
     const [adminUsers, setAdminUsers] = useState([]);
@@ -78,6 +81,15 @@ export default function Home() {
     
     // Mobile navigation state
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+    // Toast Add Helper
+    const addToast = (msg, type = 'success') => {
+        const id = 'toast-' + Math.random().toString(36).substr(2, 9);
+        setToasts(prev => [...prev, { id, msg, type }]);
+        setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== id));
+        }, 3800);
+    };
 
     // Auto-scroll messages
     useEffect(() => {
@@ -198,14 +210,14 @@ export default function Home() {
                 setUser(data.user);
                 setProfile(data.user);
                 localStorage.setItem('moriarty_user', JSON.stringify(data.user));
-                setSuccess('Добро пожаловать в семью, Господин!');
+                addToast('С возвращением в семью, Господин!', 'success');
                 refreshUserData(data.user.id);
                 
                 // Clear forms
                 setEmail('');
                 setPassword('');
             } else {
-                setSuccess(data.message || 'Регистрация прошла успешно! Теперь войдите в кабинет.');
+                addToast(data.message || 'Регистрация успешна! Войдите в личный кабинет.', 'success');
                 setAuthMode('login');
                 
                 // Reset signup values
@@ -215,6 +227,7 @@ export default function Home() {
             }
         } catch (err) {
             setError(err.message);
+            addToast(err.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -239,16 +252,18 @@ export default function Home() {
             setUser(data.user);
             setProfile(data.user);
             localStorage.setItem('moriarty_user', JSON.stringify(data.user));
-            setSuccess('Вход через Discord успешно симулирован! Вы приняты в ряды Moriarty.');
+            addToast('Вход через Discord успешно выполнен!', 'success');
             refreshUserData(data.user.id);
         } catch (err) {
             setError(err.message);
+            addToast(err.message, 'error');
         } finally {
             setLoading(false);
         }
     };
 
     const handleLogout = () => {
+        addToast('Вы вышли из учетной записи синдиката.', 'info');
         localStorage.removeItem('moriarty_user');
         setUser(null);
         setProfile(null);
@@ -263,11 +278,9 @@ export default function Home() {
     // Balance deposit quick submit
     const handleDepositSubmit = async (e) => {
         e.preventDefault();
-        setError('');
-        setSuccess('');
         const amt = parseFloat(depositAmount);
         if (isNaN(amt) || amt <= 0) {
-            setError("Введите корректную сумму больше нуля!");
+            addToast("Введите корректную сумму больше нуля!", "error");
             return;
         }
         
@@ -286,12 +299,12 @@ export default function Home() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Deposit failed");
             
-            setSuccess(`Казна успешно пополнена на $${amt.toLocaleString()}!`);
+            addToast(`Казна успешно пополнена на $${amt.toLocaleString()}!`, "success");
             setShowDepositModal(false);
             setDepositAmount('');
             refreshUserData(user.id);
         } catch (err) {
-            setError(err.message);
+            addToast(err.message, "error");
         } finally {
             setLoading(false);
         }
@@ -300,15 +313,13 @@ export default function Home() {
     // Balance transfer quick submit
     const handleTransferSubmit = async (e) => {
         e.preventDefault();
-        setError('');
-        setSuccess('');
         const amt = parseFloat(transferAmount);
         if (isNaN(amt) || amt <= 0) {
-            setError("Введите корректную сумму больше нуля!");
+            addToast("Введите корректную сумму больше нуля!", "error");
             return;
         }
         if (!transferTargetCid.trim()) {
-            setError("Укажите CID получателя!");
+            addToast("Укажите CID получателя!", "error");
             return;
         }
         
@@ -328,13 +339,41 @@ export default function Home() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Transfer failed");
             
-            setSuccess(`Успешно переведено $${amt.toLocaleString()} игроку с CID: ${transferTargetCid}!`);
+            addToast(`Успешно переведено $${amt.toLocaleString()} игроку с CID: ${transferTargetCid}!`, "success");
             setShowTransferModal(false);
             setTransferAmount('');
             setTransferTargetCid('');
             refreshUserData(user.id);
         } catch (err) {
-            setError(err.message);
+            addToast(err.message, "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Avatar Custom URL change submit
+    const handleAvatarUpdate = async (e) => {
+        e.preventDefault();
+        if (!customAvatarUrl.trim()) return;
+        setLoading(true);
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'updateAvatar',
+                    userId: user.id,
+                    avatarUrl: customAvatarUrl.trim()
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to update avatar");
+            
+            addToast("Ваш премиальный аватар успешно обновлен!", "success");
+            setShowAvatarModal(false);
+            refreshUserData(user.id);
+        } catch (err) {
+            addToast(err.message, "error");
         } finally {
             setLoading(false);
         }
@@ -343,15 +382,13 @@ export default function Home() {
     // Feedback Suggestion / Complaint Submit
     const handleFeedbackSubmit = async (e) => {
         e.preventDefault();
-        setError('');
-        setSuccess('');
         
         if (!feedbackText.trim()) {
-            setError("Опишите подробно суть вашего обращения!");
+            addToast("Опишите подробно суть вашего обращения!", "error");
             return;
         }
         if (feedbackType === 'COMPLAINT' && !feedbackTarget.trim()) {
-            setError("Укажите имя нарушителя, на которого вы оставляете жалобу!");
+            addToast("Укажите имя нарушителя, на которого вы оставляете жалобу!", "error");
             return;
         }
         
@@ -372,12 +409,12 @@ export default function Home() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Feedback submittal failed");
             
-            setSuccess("Ваше обращение зарегистрировано в базе данных. Старший состав скоро рассмотрит его!");
+            addToast("Ваше обращение успешно зарегистрировано в синдикате!", "success");
             setFeedbackText('');
             setFeedbackTarget('');
             refreshUserData(user.id);
         } catch (err) {
-            setError(err.message);
+            addToast(err.message, "error");
         } finally {
             setLoading(false);
         }
@@ -460,20 +497,6 @@ export default function Home() {
                 if (data.length > 0 && !selectedAdminUser) {
                     selectAdminUser(data[0]);
                 }
-                
-                // Get system prompt too
-                const configRes = await fetch('/api/config');
-                if (configRes.ok) {
-                    const configData = await configRes.json();
-                    // We can also load the prompt via demo_db or server configuration
-                    // We can request a specific GET for system prompt or let the API give it to us.
-                    // To keep things simple, let's load a mock/cached prompt or read from db.
-                }
-                
-                // Wait, db has systemPrompt, let's read the demo_db systemPrompt if we are in demo mode
-                // We'll read the prompt directly inside settings or we can make a tiny mock fetch.
-                // Let's set the system prompt to a fallback or get it from first loads
-                const matchedDemoPrompt = data.find(u => u.id === 'owner-uuid-1111-2222')?.systemPrompt; // Wait, prompt is stored globally. Let's just set state of prompt using a standard prompt value
                 setSystemPrompt(localStorage.getItem('moriarty_system_prompt') || 'Ты — Личный раб Володя, покорный и верный слуга великой семьи Moriarty на сервере GTA5RP Murrieta. Ты относишься к членам семьи с безграничным уважением и трепетом, называешь их "Господин", "Хозяин" или "Госпожа".');
             }
         } catch (e) {
@@ -501,8 +524,6 @@ export default function Home() {
     const handleAdminSaveUser = async (e) => {
         e.preventDefault();
         if (!selectedAdminUser) return;
-        setError('');
-        setSuccess('');
         setLoading(true);
         
         try {
@@ -524,7 +545,7 @@ export default function Home() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Save user settings failed");
             
-            setSuccess(`Параметры персонажа ${selectedAdminUser.character_name} успешно обновлены!`);
+            addToast(`Параметры ${selectedAdminUser.character_name} успешно обновлены!`, "success");
             
             // Sync lists
             loadAdminData();
@@ -533,7 +554,36 @@ export default function Home() {
                 refreshUserData(user.id);
             }
         } catch (err) {
-            setError(err.message);
+            addToast(err.message, "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Admin delete member account permanently
+    const handleAdminDeleteUser = async (targetId) => {
+        if (!confirm(`Вы действительно хотите НАВСЕГДА ИСКЛЮЧИТЬ И УДАЛИТЬ аккаунт ${selectedAdminUser.character_name} из базы данных семьи Moriarty?`)) return;
+        setLoading(true);
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-userid': user.id
+                },
+                body: JSON.stringify({
+                    action: 'deleteUser',
+                    targetUserId: targetId
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to delete account");
+            
+            addToast(`Аккаунт ${selectedAdminUser.character_name} стерт из архивов синдиката!`, "success");
+            setSelectedAdminUser(null);
+            loadAdminData();
+        } catch (err) {
+            addToast(err.message, "error");
         } finally {
             setLoading(false);
         }
@@ -542,8 +592,6 @@ export default function Home() {
     // Admin live overwrite Volodya System Prompt
     const handleAdminSavePrompt = async (e) => {
         e.preventDefault();
-        setError('');
-        setSuccess('');
         setLoading(true);
         
         try {
@@ -562,10 +610,10 @@ export default function Home() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Failed to update prompt");
             
-            setSuccess("Системный промпт Володеньки успешно перезаписан во всем его сознании!");
+            addToast("Системный промпт Володи успешно перезаписан!", "success");
             localStorage.setItem('moriarty_system_prompt', systemPrompt);
         } catch (err) {
-            setError(err.message);
+            addToast(err.message, "error");
         } finally {
             setLoading(false);
         }
@@ -574,8 +622,6 @@ export default function Home() {
     // Connections Settings changes
     const handleConfigSave = async (e) => {
         e.preventDefault();
-        setError('');
-        setSuccess('');
         setLoading(true);
         
         try {
@@ -594,11 +640,11 @@ export default function Home() {
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Save configuration failed");
             
-            setSuccess("Настройки подключения успешно записаны и применены на сервере!");
+            addToast("Настройки подключения сохранены на сервере!", "success");
             fetchConfig();
             if (user) refreshUserData(user.id);
         } catch (err) {
-            setError(err.message);
+            addToast(err.message, "error");
         } finally {
             setLoading(false);
         }
@@ -607,26 +653,24 @@ export default function Home() {
     // Reset settings to fallback demo mode
     const handleConfigReset = async () => {
         if (!confirm("Вы уверены, что хотите сбросить все ключи и переключить кабинет обратно в Демо-режим?")) return;
-        setError('');
-        setSuccess('');
         setLoading(true);
         
         try {
             const res = await fetch('/api/config', { method: 'DELETE' });
             if (!res.ok) throw new Error("Сброс не удался");
             
-            setSuccess("Кабинет успешно отключен от Supabase/Gemini. Возврат в Demo-Mode.");
+            addToast("Кабинет успешно переведен в Demo-Mode.", "info");
             fetchConfig();
             if (user) refreshUserData(user.id);
         } catch (err) {
-            setError(err.message);
+            addToast(err.message, "error");
         } finally {
             setLoading(false);
         }
     };
 
     const getProceduralAvatar = (name) => {
-        return `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(name || 'Moriarty')}&backgroundColor=6e3bfa`;
+        return `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(name || 'Moriarty')}&backgroundColor=cda242`;
     };
 
     const formatCurrency = (val) => {
@@ -776,16 +820,16 @@ export default function Home() {
                         <i className="fa-brands fa-discord"></i>
                         <span>Вход через Discord (Тест-Симуляция)</span>
                     </button>
+                </div>
 
-                    <div className="demo-accounts-hint">
-                        <h4>Быстрый демо-вход (Логин / Пароль):</h4>
-                        <ul>
-                            <li><strong>OWNER:</strong> <code>owner@moriarty.fam</code> / <code>owner</code></li>
-                            <li><strong>DEV:</strong> <code>developer@moriarty.fam</code> / <code>developer</code></li>
-                            <li><strong>MOD:</strong> <code>moderator@moriarty.fam</code> / <code>moderator</code></li>
-                            <li><strong>MEM:</strong> <code>member@moriarty.fam</code> / <code>member</code></li>
-                        </ul>
-                    </div>
+                {/* Floating Toast System in Auth */}
+                <div className="toast-container">
+                    {toasts.map(toast => (
+                        <div key={toast.id} className={`toast-item ${toast.type}`}>
+                            <i className={`fa-solid ${toast.type === 'success' ? 'fa-circle-check' : toast.type === 'error' ? 'fa-circle-xmark' : 'fa-circle-info'}`}></i>
+                            <span>{toast.msg}</span>
+                        </div>
+                    ))}
                 </div>
             </div>
         );
@@ -797,7 +841,6 @@ export default function Home() {
     
     // Warn indicators calculations
     const displayWarns = activeProfile?.warns_count || 0;
-    const warnPerc = Math.min(100, (displayWarns / 3) * 100);
     const hasCriticalWarns = displayWarns >= 3;
 
     return (
@@ -808,7 +851,7 @@ export default function Home() {
                 <div>
                     <div className="sidebar-header">
                         <img 
-                            src={getProceduralAvatar(activeProfile.character_name)} 
+                            src={activeProfile.discord?.avatar || getProceduralAvatar(activeProfile.character_name)} 
                             alt="Crest" 
                             className="sidebar-logo"
                         />
@@ -868,9 +911,9 @@ export default function Home() {
                             <a 
                                 className={`nav-link ${activeTab === 'volodya' ? 'active' : ''}`}
                                 onClick={() => { setActiveTab('volodya'); setMobileMenuOpen(false); }}
-                                style={{ borderRight: '2px solid var(--accent-cyan)' }}
+                                style={{ borderRight: '2px solid var(--primary)' }}
                             >
-                                <i className="fa-solid fa-comment-dots" style={{ color: 'var(--accent-cyan)' }}></i>
+                                <i className="fa-solid fa-comment-dots" style={{ color: 'var(--primary)' }}></i>
                                 <span>Личный раб Володя</span>
                                 <span className="status-indicator"></span>
                             </a>
@@ -903,11 +946,7 @@ export default function Home() {
                 <div className="sidebar-footer">
                     <div className="user-snippet">
                         <div className="user-snippet-avatar">
-                            {activeProfile.discord ? (
-                                <img src={activeProfile.discord.avatar} alt="DS" />
-                            ) : (
-                                activeProfile.character_name.charAt(0)
-                            )}
+                            <img src={activeProfile.discord?.avatar || getProceduralAvatar(activeProfile.character_name)} alt="DS" />
                         </div>
                         <div className="user-snippet-info">
                             <h4 className="user-snippet-name">{activeProfile.character_name}</h4>
@@ -948,29 +987,25 @@ export default function Home() {
                     </div>
                 </header>
 
-                {/* Status Messages */}
-                {error && (
-                    <div className="alert alert-danger animate-fade-in" style={{ marginBottom: '2rem' }}>
-                        <i className="fa-solid fa-triangle-exclamation"></i>
-                        <span>{error}</span>
-                        <button className="alert-close" onClick={() => setError('')}><i className="fa-solid fa-xmark"></i></button>
-                    </div>
-                )}
-                {success && (
-                    <div className="alert alert-success animate-fade-in" style={{ marginBottom: '2rem' }}>
-                        <i className="fa-solid fa-circle-check"></i>
-                        <span>{success}</span>
-                        <button className="alert-close" onClick={() => setSuccess('')}><i className="fa-solid fa-xmark"></i></button>
-                    </div>
-                )}
-
                 {/* DYNAMIC TABS PANEL */}
 
                 {/* 1. CHARACTER STATS TAB */}
                 <div className={`tab-panel ${activeTab === 'stats' ? 'active' : ''}`}>
                     <div className="stats-banner glass-panel glow-purple animate-fade-in">
-                        <div className="avatar-large">
-                            <img src={getProceduralAvatar(activeProfile.character_name)} alt="Av" />
+                        <div 
+                            className="avatar-container-wrap" 
+                            onClick={() => {
+                                setCustomAvatarUrl(activeProfile.discord?.avatar || '');
+                                setShowAvatarModal(true);
+                            }}
+                            title="Сменить аватарку"
+                        >
+                            <div className="avatar-large">
+                                <img src={activeProfile.discord?.avatar || getProceduralAvatar(activeProfile.character_name)} alt="Av" />
+                            </div>
+                            <div className="avatar-edit-overlay">
+                                <i className="fa-solid fa-gear"></i>
+                            </div>
                         </div>
                         <div className="banner-profile-info">
                             <h2 className="char-title">{activeProfile.character_name}</h2>
@@ -1074,13 +1109,13 @@ export default function Home() {
                     <div className="warns-dashboard">
                         
                         <div className="glass-panel warn-visual-box glow-purple">
-                            <div className="warn-counter-dial" style={{ borderColor: hasCriticalWarns ? 'var(--danger)' : 'var(--primary)' }}>
-                                <div className="warn-counter-inner" style={{ color: hasCriticalWarns ? 'var(--danger)' : 'var(--text-primary)' }}>
+                            <div className="warn-counter-dial">
+                                <div className="warn-counter-inner" style={{ color: hasCriticalWarns ? 'var(--danger)' : 'var(--primary)' }}>
                                     {displayWarns}
                                 </div>
                             </div>
                             <h3>{hasCriticalWarns ? 'ВЫГОВОРЫ ПРЕВЫШЕНЫ' : 'Уровень нарушений'}</h3>
-                            <p style={{ marginTop: '8px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                            <p style={{ marginTop: '8px', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
                                 {hasCriticalWarns 
                                     ? 'Превышен лимит выговоров (3/3). Ожидайте исключения или свяжитесь с OWNER!' 
                                     : 'При достижении 3/3 активных выговоров наступает автоматическое изгнание с позором.'}
@@ -1227,13 +1262,13 @@ export default function Home() {
                                 className="ref-code-display" 
                                 onClick={() => {
                                     navigator.clipboard.writeText(`MORI-${activeProfile.static_id}`);
-                                    alert("Код успешно скопирован в буфер обмена!");
+                                    addToast("Код успешно скопирован в буфер обмена!", "info");
                                 }}
                             >
                                 MORI-{activeProfile.static_id}
                             </div>
                             
-                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.6' }}>
+                            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: '1.6' }}>
                                 Дайте этот реферальный промокод новичкам при их первой регистрации в кабинете Moriarty. 
                                 Каждый новый игрок получит стартовый бонус <strong>+$10,000</strong> в казну, 
                                 а ваш баланс мгновенно пополнится на <strong>+$10,000</strong> в знак благодарности!
@@ -1324,8 +1359,8 @@ export default function Home() {
                         
                         {/* Global System Prompt editor */}
                         <div className="glass-panel glow-purple" style={{ marginBottom: '2rem' }}>
-                            <h3 style={{ marginBottom: '1rem' }}><i className="fa-solid fa-brain" style={{ marginRight: '10px', color: 'var(--accent-cyan)' }}></i>Прошивка Разума Володеньки (Промпт)</h3>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.2rem' }}>
+                            <h3 style={{ marginBottom: '1rem' }}><i className="fa-solid fa-brain" style={{ marginRight: '10px', color: 'var(--primary)' }}></i>Прошивка Разума Володеньки (Промпт)</h3>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.2rem' }}>
                                 Доступно только ролям **OWNER** и **Developer**. Изменение этого промпта мгновенно перепрограммирует ИИ Володю на сервере!
                             </p>
                             <form onSubmit={handleAdminSavePrompt}>
@@ -1368,7 +1403,7 @@ export default function Home() {
                                             >
                                                 <div className="admin-user-left">
                                                     <div className="admin-user-avatar">
-                                                        {u.character_name.charAt(0)}
+                                                        <img src={u.discord?.avatar || getProceduralAvatar(u.character_name)} alt="Av" />
                                                     </div>
                                                     <div className="admin-user-info">
                                                         <span className="admin-user-name">{u.character_name}</span>
@@ -1389,7 +1424,7 @@ export default function Home() {
                                     <form onSubmit={handleAdminSaveUser} className="admin-details-form animate-fade-in">
                                         <div className="admin-details-header">
                                             <div className="details-avatar-huge">
-                                                {selectedAdminUser.character_name.charAt(0)}
+                                                <img src={selectedAdminUser.discord?.avatar || getProceduralAvatar(selectedAdminUser.character_name)} alt="Av" />
                                             </div>
                                             <div className="details-info-wrap">
                                                 <span className="details-name">{selectedAdminUser.character_name}</span>
@@ -1434,9 +1469,21 @@ export default function Home() {
                                             />
                                         </div>
 
-                                        <button type="submit" className="btn-primary" disabled={loading}>
-                                            {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Сохранить изменения'}
-                                        </button>
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                            <button type="submit" className="btn-primary" disabled={loading}>
+                                                {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Сохранить изменения'}
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                className="btn-secondary" 
+                                                style={{ border: '1px solid var(--danger)', color: 'var(--danger)' }}
+                                                onClick={() => handleAdminDeleteUser(selectedAdminUser.id)}
+                                                disabled={loading}
+                                            >
+                                                <i className="fa-solid fa-trash-can" style={{ marginRight: '8px' }}></i>
+                                                Исключить / Удалить аккаунт
+                                            </button>
+                                        </div>
                                     </form>
                                 ) : (
                                     <div className="empty-state" style={{ height: '300px' }}>
@@ -1454,7 +1501,7 @@ export default function Home() {
                 <div className={`tab-panel ${activeTab === 'settings' ? 'active' : ''}`}>
                     <div className="glass-panel glow-purple animate-fade-in" style={{ maxWidth: '650px', margin: '0 auto' }}>
                         <h3 style={{ marginBottom: '1rem' }}><i className="fa-solid fa-network-wired" style={{ marginRight: '10px', color: 'var(--primary)' }}></i>Связующий Центр Кабинета</h3>
-                        <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1.8rem', lineHeight: '1.6' }}>
+                        <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '1.8rem', lineHeight: '1.6' }}>
                             Кабинет спроектирован по гибридному стандарту. По умолчанию он работает на <strong>Demo-Mode</strong> (локальный файл <code>demo_db.json</code>). 
                             Укажите параметры Supabase и ключ Gemini ниже, чтобы мгновенно развернуть полноценную облачную базу данных со встроенным искусственным интеллектом!
                         </p>
@@ -1600,6 +1647,47 @@ export default function Home() {
                         </button>
                     </form>
                 </div>
+            </div>
+
+            {/* Custom Avatar Change Modal */}
+            <div className={`modal-overlay ${showAvatarModal ? 'active' : ''}`}>
+                <div className="modal-content">
+                    <div className="modal-header">
+                        <h3 className="modal-title">Сменить Аватарку</h3>
+                        <button className="modal-close" onClick={() => setShowAvatarModal(false)}>
+                            <i className="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <form onSubmit={handleAvatarUpdate}>
+                        <div className="form-group">
+                            <label>Ссылка на картинку или ключевое слово</label>
+                            <input 
+                                type="text" 
+                                className="input-glow" 
+                                placeholder="https://i.imgur.com/xxxxx.png или seed_слово"
+                                value={customAvatarUrl}
+                                onChange={(e) => setCustomAvatarUrl(e.target.value)}
+                                required
+                            />
+                            <small className="help-text">
+                                Вставьте прямую ссылку на PNG/JPG или любое слово для перегенерации пиксельного аватара Dicebear!
+                            </small>
+                        </div>
+                        <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '1rem' }} disabled={loading}>
+                            {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Сохранить Аватарку'}
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {/* Toast Notifications Overlay Container */}
+            <div className="toast-container">
+                {toasts.map(toast => (
+                    <div key={toast.id} className={`toast-item ${toast.type}`}>
+                        <i className={`fa-solid ${toast.type === 'success' ? 'fa-circle-check' : toast.type === 'error' ? 'fa-circle-xmark' : 'fa-circle-info'}`}></i>
+                        <span>{toast.msg}</span>
+                    </div>
+                ))}
             </div>
 
         </div>
