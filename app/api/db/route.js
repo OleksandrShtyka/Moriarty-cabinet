@@ -17,6 +17,13 @@ function getSupabaseClient() {
     return null;
 }
 
+// Helper to validate UUID format
+function isValidUuid(uuid) {
+    if (!uuid) return false;
+    const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return regex.test(uuid);
+}
+
 // GET queries: warns, transactions, feedbacks, referrals, configs
 export async function GET(request) {
     const url = new URL(request.url);
@@ -27,6 +34,18 @@ export async function GET(request) {
     const supabase = getSupabaseClient();
     
     try {
+        if (supabase) {
+            if (userId && !isValidUuid(userId)) {
+                if (action === 'getProfile') {
+                    return NextResponse.json({ error: "Необходим перезапуск сессии. Пожалуйста, выйдите из аккаунта и войдите заново!" }, { status: 400 });
+                }
+                return NextResponse.json([]);
+            }
+            if (adminUserId && !isValidUuid(adminUserId)) {
+                return NextResponse.json({ error: "В доступе отказано! Невалидный ID сессии администратора." }, { status: 403 });
+            }
+        }
+
         if (action === 'getProfile') {
             if (supabase) {
                 const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
@@ -151,6 +170,21 @@ export async function POST(request) {
         const body = await request.json();
         const { action, userId, amount, senderId, targetStaticId, type, targetMember, text, targetUserId, role, warns, balance, prompt } = body;
         const adminUserId = request.headers.get('x-admin-userid');
+        
+        if (supabase) {
+            if (userId && !isValidUuid(userId)) {
+                return NextResponse.json({ error: "Необходим перезапуск сессии. Пожалуйста, выйдите из аккаунта и войдите заново!" }, { status: 400 });
+            }
+            if (adminUserId && !isValidUuid(adminUserId)) {
+                return NextResponse.json({ error: "Невалидный ID сессии администратора." }, { status: 400 });
+            }
+            if (targetUserId && !isValidUuid(targetUserId)) {
+                return NextResponse.json({ error: "Невалидный ID целевого пользователя." }, { status: 400 });
+            }
+            if (senderId && !isValidUuid(senderId)) {
+                return NextResponse.json({ error: "Невалидный ID отправителя." }, { status: 400 });
+            }
+        }
         
         if (action === 'deposit') {
             if (amount <= 0) return NextResponse.json({ error: "Сумма вклада должна быть больше нуля!" }, { status: 400 });
