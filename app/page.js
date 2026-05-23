@@ -126,29 +126,38 @@ export default function Home() {
     const handleEmailUpdate = async (e) => {
         e.preventDefault();
         if (!newEmail.trim()) return;
-        setLoading(true);
-        try {
-            const res = await fetch('/api/db', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'changeEmail',
-                    userId: user.id,
-                    newEmail: newEmail.trim()
-                })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to update email");
-            
-            addToast("Электронная почта синдиката успешно изменена!", "success");
-            setUser(prev => ({ ...prev, email: newEmail.trim() }));
-            setNewEmail('');
-            refreshUserData(user.id);
-        } catch (err) {
-            addToast(err.message, "error");
-        } finally {
-            setLoading(false);
-        }
+        
+        triggerConfirm(
+            "Смена почтового ящика",
+            `Вы действительно хотите изменить электронную почту синдиката на "${newEmail.trim()}"? Это действие обновит ваш мастер-логин для входа в личный кабинет.`,
+            async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/db', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'changeEmail',
+                            userId: user.id,
+                            newEmail: newEmail.trim()
+                        })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Failed to update email");
+                    
+                    addToast("Электронная почта синдиката успешно изменена!", "success");
+                    setUser(prev => ({ ...prev, email: newEmail.trim() }));
+                    setNewEmail('');
+                    refreshUserData(user.id);
+                } catch (err) {
+                    addToast(err.message, "error");
+                } finally {
+                    setLoading(false);
+                }
+            },
+            "Изменить почту",
+            "Отмена"
+        );
     };
 
     const handlePasswordUpdate = async (e) => {
@@ -158,28 +167,37 @@ export default function Home() {
             addToast("Пароли не совпадают!", "error");
             return;
         }
-        setLoading(true);
-        try {
-            const res = await fetch('/api/db', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'changePassword',
-                    userId: user.id,
-                    newPassword: newPassword.trim()
-                })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to update password");
-            
-            addToast("Пароль успешно обновлен в шифрованных базах!", "success");
-            setNewPassword('');
-            setConfirmPassword('');
-        } catch (err) {
-            addToast(err.message, "error");
-        } finally {
-            setLoading(false);
-        }
+        
+        triggerConfirm(
+            "Изменение шифра доступа",
+            "Вы собираетесь обновить мастер-пароль вашей учетной записи синдиката. Будьте внимательны, это изменит ключ доступа к кабинету! Подтвердить?",
+            async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/db', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'changePassword',
+                            userId: user.id,
+                            newPassword: newPassword.trim()
+                        })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Failed to update password");
+                    
+                    addToast("Пароль успешно обновлен в шифрованных базах!", "success");
+                    setNewPassword('');
+                    setConfirmPassword('');
+                } catch (err) {
+                    addToast(err.message, "error");
+                } finally {
+                    setLoading(false);
+                }
+            },
+            "Обновить пароль",
+            "Отмена"
+        );
     };
 
     const handleSelfDelete = async () => {
@@ -400,30 +418,38 @@ export default function Home() {
             return;
         }
         
-        setLoading(true);
-        try {
-            const res = await fetch('/api/db', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'deposit',
-                    userId: user.id,
-                    amount: amt
-                })
-            });
-            
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Deposit failed");
-            
-            addToast(`Казна успешно пополнена на $${amt.toLocaleString()}!`, "success");
-            setShowDepositModal(false);
-            setDepositAmount('');
-            refreshUserData(user.id);
-        } catch (err) {
-            addToast(err.message, "error");
-        } finally {
-            setLoading(false);
-        }
+        triggerConfirm(
+            "Взнос в семейную казну",
+            `Вы действительно хотите пополнить общую казну синдиката Moriarty на сумму $${amt.toLocaleString()} из вашего личного сейфа? Это действие необратимо.`,
+            async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/db', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'deposit',
+                            userId: user.id,
+                            amount: amt
+                        })
+                    });
+                    
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Deposit failed");
+                    
+                    addToast(`Казна успешно пополнена на $${amt.toLocaleString()}!`, "success");
+                    setShowDepositModal(false);
+                    setDepositAmount('');
+                    refreshUserData(user.id);
+                } catch (err) {
+                    addToast(err.message, "error");
+                } finally {
+                    setLoading(false);
+                }
+            },
+            "Внести в казну",
+            "Отмена"
+        );
     };
 
     // Balance transfer quick submit
@@ -439,32 +465,40 @@ export default function Home() {
             return;
         }
         
-        setLoading(true);
-        try {
-            const res = await fetch('/api/db', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'transfer',
-                    senderId: user.id,
-                    targetStaticId: transferTargetCid.trim(),
-                    amount: amt
-                })
-            });
-            
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Transfer failed");
-            
-            addToast(`Успешно переведено $${amt.toLocaleString()} игроку с CID: ${transferTargetCid}!`, "success");
-            setShowTransferModal(false);
-            setTransferAmount('');
-            setTransferTargetCid('');
-            refreshUserData(user.id);
-        } catch (err) {
-            addToast(err.message, "error");
-        } finally {
-            setLoading(false);
-        }
+        triggerConfirm(
+            "Подтверждение перевода",
+            `Вы действительно хотите совершить перевод средств на сумму $${amt.toLocaleString()} для бойца с CID: "${transferTargetCid.trim()}"? Деньги будут списаны с вашего счета немедленно.`,
+            async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/db', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'transfer',
+                            senderId: user.id,
+                            targetStaticId: transferTargetCid.trim(),
+                            amount: amt
+                        })
+                    });
+                    
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Transfer failed");
+                    
+                    addToast(`Успешно переведено $${amt.toLocaleString()} игроку с CID: ${transferTargetCid}!`, "success");
+                    setShowTransferModal(false);
+                    setTransferAmount('');
+                    setTransferTargetCid('');
+                    refreshUserData(user.id);
+                } catch (err) {
+                    addToast(err.message, "error");
+                } finally {
+                    setLoading(false);
+                }
+            },
+            "Подтвердить перевод",
+            "Отмена"
+        );
     };
 
     // Avatar Custom URL change submit
@@ -1468,64 +1502,94 @@ export default function Home() {
 
                 {/* 7. SETTINGS & ACCOUNT MANAGEMENT TAB */}
                 <div className={`tab-panel ${activeTab === 'settings' ? 'active' : ''}`}>
-                    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+                    <div style={{ maxWidth: '950px', margin: '0 auto' }}>
                         
-                        {/* Sub-tab selection menu */}
-                        <div className="feedback-type-selector" style={{ marginBottom: '2.5rem', display: 'flex', gap: '10px' }}>
-                            <button 
-                                type="button"
-                                className={`type-tab ${settingsSubTab === 'account' ? 'active' : ''}`}
-                                onClick={() => setSettingsSubTab('account')}
-                            >
-                                <i className="fa-solid fa-user-gear" style={{ marginRight: '8px' }}></i>
-                                Настройки Аккаунта
-                            </button>
-                            <button 
-                                type="button"
-                                className={`type-tab ${settingsSubTab === 'api' ? 'active' : ''}`}
-                                onClick={() => setSettingsSubTab('api')}
-                            >
-                                <i className="fa-solid fa-network-wired" style={{ marginRight: '8px' }}></i>
-                                Подключения API
-                            </button>
-                            {isOwnerOrDev && (
+                        {/* Sub-tab selection menu with secret admin lock */}
+                        <div className="settings-tab-bar">
+                            <div className="settings-tabs-left">
                                 <button 
                                     type="button"
-                                    className={`type-tab ${settingsSubTab === 'admin' ? 'active' : ''}`}
-                                    onClick={() => setSettingsSubTab('admin')}
-                                    style={{ borderColor: 'var(--accent-pink)' }}
+                                    className={`settings-tab-btn ${settingsSubTab === 'account' ? 'active' : ''}`}
+                                    onClick={() => setSettingsSubTab('account')}
                                 >
-                                    <i className="fa-solid fa-shield-halved" style={{ marginRight: '8px', color: 'var(--accent-pink)' }}></i>
-                                    Панель OWNER/DEV
+                                    <i className="fa-solid fa-user-gear"></i>
+                                    <span>Настройки Аккаунта</span>
+                                </button>
+                                <button 
+                                    type="button"
+                                    className={`settings-tab-btn ${settingsSubTab === 'api' ? 'active' : ''}`}
+                                    onClick={() => setSettingsSubTab('api')}
+                                >
+                                    <i className="fa-solid fa-network-wired"></i>
+                                    <span>Подключения API</span>
+                                </button>
+                            </div>
+
+                            {/* Hidden Key Lock only for OWNER/DEV */}
+                            {isOwnerOrDev && (
+                                <button
+                                    type="button"
+                                    className={`settings-secret-admin-btn ${settingsSubTab === 'admin' ? 'active' : ''}`}
+                                    onClick={() => {
+                                        if (settingsSubTab === 'admin') {
+                                            setSettingsSubTab('account');
+                                            addToast("Панель администратора заблокирована.", "info");
+                                        } else {
+                                            setSettingsSubTab('admin');
+                                            addToast("[СИСТЕМА] Доступ разрешен. Панель OWNER/DEV разблокирована!", "success");
+                                        }
+                                    }}
+                                    title="Вход в секретную панель управления (OWNER/DEV)"
+                                >
+                                    <i className={`fa-solid ${settingsSubTab === 'admin' ? 'fa-lock-open' : 'fa-lock'}`}></i>
                                 </button>
                             )}
                         </div>
 
                         {/* SUB-PANEL 1: ACCOUNT SETTINGS */}
                         {settingsSubTab === 'account' && (
-                            <div className="account-settings-grid animate-fade-in" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                            <div className="account-settings-container animate-fade-in">
                                 
                                 {/* Left column: Avatar & Profile Info */}
-                                <div className="glass-panel glow-purple" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem', textAlign: 'center' }}>
-                                    <div 
-                                        className="avatar-container-wrap" 
-                                        onClick={() => {
-                                            setCustomAvatarUrl(activeProfile.discord?.avatar || '');
-                                            setShowAvatarModal(true);
-                                        }}
-                                        title="Сменить аватарку"
-                                        style={{ marginBottom: '1.5rem' }}
-                                    >
-                                        <div className="avatar-large" style={{ width: '130px', height: '130px' }}>
-                                            <img src={activeProfile.discord?.avatar || getProceduralAvatar(activeProfile.character_name)} alt="Av" />
-                                        </div>
-                                        <div className="avatar-edit-overlay">
-                                            <i className="fa-solid fa-gear"></i>
+                                <div className="glass-panel glow-purple" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem', textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
+                                    <div className="avatar-large-container">
+                                        <div className="avatar-rotating-ring"></div>
+                                        <div 
+                                            className="avatar-container-wrap" 
+                                            onClick={() => {
+                                                setCustomAvatarUrl(activeProfile.discord?.avatar || '');
+                                                setShowAvatarModal(true);
+                                            }}
+                                            title="Сменить аватарку"
+                                        >
+                                            <div className="avatar-large" style={{ width: '130px', height: '130px', margin: 0 }}>
+                                                <img src={activeProfile.discord?.avatar || getProceduralAvatar(activeProfile.character_name)} alt="Av" />
+                                            </div>
+                                            <div className="avatar-edit-overlay" style={{ borderRadius: '12px' }}>
+                                                <i className="fa-solid fa-gear"></i>
+                                            </div>
                                         </div>
                                     </div>
+
                                     <h2 className="char-title" style={{ fontSize: '1.6rem', marginBottom: '4px' }}>{activeProfile.character_name}</h2>
-                                    <span className="char-static" style={{ color: 'var(--primary)', fontWeight: '700', fontSize: '0.9rem', display: 'block', marginBottom: '8px' }}>CID: {activeProfile.static_id}</span>
-                                    <span className="user-snippet-role" style={{ background: 'rgba(205,162,66,0.1)', border: '1px solid var(--primary)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                                    <span className="char-static" style={{ color: 'var(--primary)', fontWeight: '700', fontSize: '0.9rem', display: 'block', marginBottom: '12px' }}>CID: {activeProfile.static_id}</span>
+                                    
+                                    {/* Clickable Role Badge shortcut for OWNER/DEV */}
+                                    <span 
+                                        className={`user-role-badge-interactive ${isOwnerOrDev ? 'interactive' : ''}`}
+                                        onClick={() => {
+                                            if (isOwnerOrDev) {
+                                                if (settingsSubTab === 'admin') {
+                                                    setSettingsSubTab('account');
+                                                    addToast("Панель администратора заблокирована.", "info");
+                                                } else {
+                                                    setSettingsSubTab('admin');
+                                                    addToast("[СИСТЕМА] Доступ разрешен. Панель OWNER/DEV разблокирована!", "success");
+                                                }
+                                            }
+                                        }}
+                                        title={isOwnerOrDev ? "Нажмите, чтобы разблокировать Панель OWNER/DEV" : undefined}
+                                    >
                                         {activeProfile.role}
                                     </span>
                                     
