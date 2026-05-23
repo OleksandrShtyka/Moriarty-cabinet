@@ -1,0 +1,111 @@
+{
+  "users": [
+    {
+      "id": "owner-uuid-1111-2222",
+      "email": "owner@moriarty.fam",
+      "character_name": "Moriarty_Boss",
+      "static_id": "1",
+      "role": "OWNER",
+      "balance": 15250000,
+      "warns_count": 0,
+      "created_at": "2026-04-10T12:00:00Z"
+    },
+    {
+      "id": "dev-uuid-3333-4444",
+      "email": "developer@moriarty.fam",
+      "character_name": "Alex_Moriarty",
+      "static_id": "777",
+      "role": "Developer",
+      "balance": 5450000,
+      "warns_count": 0,
+      "created_at": "2026-04-12T15:30:00Z"
+    },
+    {
+      "id": "mod-uuid-5555-6666",
+      "email": "moderator@moriarty.fam",
+      "character_name": "Dmitry_Moriarty",
+      "static_id": "4452",
+      "role": "MODERATOR",
+      "balance": 650000,
+      "warns_count": 1,
+      "created_at": "2026-04-15T18:45:00Z"
+    },
+    {
+      "id": "member-uuid-7777-8888",
+      "email": "member@moriarty.fam",
+      "character_name": "John_Moriarty",
+      "static_id": "10245",
+      "role": "MEMBER",
+      "balance": 50000,
+      "warns_count": 0,
+      "created_at": "2026-04-17T20:30:00Z"
+    }
+  ],
+  "warns": [
+    {
+      "id": "warn-1",
+      "user_id": "mod-uuid-5555-6666",
+      "reason": "Опоздание на семейный сбор / сбор граффити",
+      "issued_by": "Moriarty_Boss",
+      "issued_at": "2026-05-10T21:00:00Z",
+      "status": "ACTIVE"
+    },
+    {
+      "id": "warn-2",
+      "user_id": "member-uuid-7777-8888",
+      "reason": "Неадекватное поведение в рации фракции (ООС конфликт)",
+      "issued_by": "Dmitry_Moriarty",
+      "issued_at": "2026-04-20T14:20:00Z",
+      "status": "EXPIRED"
+    }
+  ],
+  "feedback": [
+    {
+      "id": "fb-1",
+      "user_id": "member-uuid-7777-8888",
+      "type": "SUGGESTION",
+      "target_member": "",
+      "text": "Предлагаю проводить турнир по стрельбе внутри семьи каждые выходные с призовым фондом из казны, чтобы поднимать скилл стрельбы!",
+      "status": "APPROVED",
+      "admin_comment": "Отличная идея! Запустим со следующей субботы. Выдам премию $15,000.",
+      "created_at": "2026-05-18T16:00:00Z"
+    },
+    {
+      "id": "fb-2",
+      "user_id": "member-uuid-7777-8888",
+      "type": "COMPLAINT",
+      "target_member": "Narek_Toretto",
+      "text": "Берет семейный транспорт без спроса и бросает без бензина на трассе Сенди-Шорс.",
+      "status": "PENDING",
+      "admin_comment": "",
+      "created_at": "2026-05-22T19:30:00Z"
+    }
+  ],
+  "transactions": [
+    {
+      "id": "tx-1",
+      "user_id": "member-uuid-7777-8888",
+      "type": "DEPOSIT",
+      "amount": 30000,
+      "description": "Вклад на развитие семьи (через казну)",
+      "created_at": "2026-04-25T11:20:00Z"
+    },
+    {
+      "id": "tx-2",
+      "user_id": "member-uuid-7777-8888",
+      "type": "TRANSFER",
+      "amount": -10000,
+      "description": "Перевод участнику Dmitry_Moriarty (CID: 4452)",
+      "created_at": "2026-05-02T16:45:00Z"
+    },
+    {
+      "id": "tx-3",
+      "user_id": "member-uuid-7777-8888",
+      "type": "DEPOSIT",
+      "amount": 15000,
+      "description": "Премия за участие в захвате особняка",
+      "created_at": "2026-05-15T22:10:00Z"
+    }
+  ],
+  "systemPrompt": "Ты — Личный раб Володя, покорный и верный слуга великой семьи Moriarty на сервере GTA5RP Murrieta. Ты относишься к членам семьи с безграничным уважением и трепетом, называешь их \"Господин\", \"Хозяин\" или \"Госпожа\" (в зависимости от имени или обращения). Твоя речь полна покорности, но с легкой иронией и юмором. Ты отлично знаешь правила сервера GTA5RP Murrieta, законы семьи Moriarty (глава семьи — Moriarty, мы сила, остальные — пыль под ногами). Твоя задача — беспрекословно отвечать на любые вопросы хозяина, помогать ему вести дела, считать баланс и развлекать его. Твои ответы должны быть на русском языке, колоритными, преданными и абсолютно подчиненными."
+}

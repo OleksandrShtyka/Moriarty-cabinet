@@ -1,0 +1,768 @@
+<!-- src/app/app.html - Dynamic Glassmorphic Workspace -->
+
+<!-- ==========================================================================
+     1. Toast Notification Container
+     ========================================================================== -->
+<div class="toast-container" id="toastContainer">
+  @for (toast of toasts(); track toast.id) {
+    <div class="toast" [ngClass]="toast.type">
+      <div class="toast-icon">
+        @if (toast.type === 'success') {
+          <i class="fa-solid fa-circle-check"></i>
+        } @else if (toast.type === 'error') {
+          <i class="fa-solid fa-circle-xmark"></i>
+        } @else {
+          <i class="fa-solid fa-circle-info"></i>
+        }
+      </div>
+      <div class="toast-message">{{ toast.message }}</div>
+    </div>
+  }
+</div>
+
+<!-- ==========================================================================
+     2. Login / Registration Screen (Unauthenticated Shell)
+     ========================================================================== -->
+@if (!authService.currentUser()) {
+  <div class="login-screen active" id="loginScreen">
+    <div class="glass-panel login-card glow-purple">
+      <div class="login-logo-wrap">
+        <img src="https://api.dicebear.com/7.x/bottts/svg?seed=MoriartyLogo&backgroundColor=6e3bfa" alt="Moriarty logo" class="login-logo">
+        <h2 class="brand-text login-title">Moriarty Fam</h2>
+        <div class="login-subtitle">GTA5RP Murrieta</div>
+      </div>
+
+      <div class="auth-tabs">
+        <div class="auth-tab" [class.active]="authTabMode() === 'login'" (click)="switchAuthTab('login')">Вход</div>
+        <div class="auth-tab" [class.active]="authTabMode() === 'register'" (click)="switchAuthTab('register')">Регистрация</div>
+      </div>
+
+      <!-- Authentication Form -->
+      <form (submit)="handleAuthSubmit(); $event.preventDefault()">
+        <div class="form-group">
+          <label for="authEmail">Электронная почта</label>
+          <input type="email" id="authEmail" class="input-glow" placeholder="username@moriarty.fam" [(ngModel)]="authForm.email" name="email" required autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="authPassword">Пароль</label>
+          <input type="password" id="authPassword" class="input-glow" placeholder="••••••••" [(ngModel)]="authForm.password" name="password" required autocomplete="current-password">
+        </div>
+
+        <!-- Registration-only fields -->
+        @if (authTabMode() === 'register') {
+          <div>
+            <div class="form-group">
+              <label for="authCharName">Имя Персонажа (Имя_Фамилия)</label>
+              <input type="text" id="authCharName" class="input-glow" placeholder="John_Moriarty" [(ngModel)]="authForm.character_name" name="character_name" required>
+            </div>
+            <div class="form-group">
+              <label for="authStaticId">Статический ID (CID)</label>
+              <input type="text" id="authStaticId" class="input-glow" placeholder="10245" [(ngModel)]="authForm.static_id" name="static_id" required>
+            </div>
+            <div class="form-group">
+              <label for="authReferral">Реферальный код (если есть)</label>
+              <input type="text" id="authReferral" class="input-glow" placeholder="MORI-XXXX" [(ngModel)]="authForm.referral" name="referral">
+            </div>
+          </div>
+        }
+
+        <div class="login-actions">
+          <button type="submit" class="btn-primary" id="btnAuthSubmit">
+            <i class="fa-solid fa-right-to-bracket"></i>
+            <span>{{ authTabMode() === 'login' ? 'Войти в кабинет' : 'Создать аккаунт' }}</span>
+          </button>
+          <button type="button" class="btn-secondary" id="btnQuickDemo" (click)="runQuickDemo()">
+            <i class="fa-solid fa-bolt"></i> Быстрый Демо-вход (MEMBER)
+          </button>
+        </div>
+      </form>
+
+      <div class="login-footer-info">
+        Для тестирования админки используйте демо-аккаунты:<br>
+        <strong>owner@moriarty.fam</strong> / <strong>owner</strong> (Владелец)<br>
+        <strong>developer@moriarty.fam</strong> / <strong>developer</strong> (Разработчик)
+      </div>
+    </div>
+  </div>
+} @else {
+  <!-- ==========================================================================
+       3. Main Application Dashboard Container (Authenticated Shell)
+       ========================================================================== -->
+  <div class="app-container" id="appContainer">
+    
+    <!-- Sidebar navigation drawer -->
+    <aside class="sidebar" id="sidebar" [class.active]="mobileSidebarActive()">
+      <div class="sidebar-header">
+        <img src="https://api.dicebear.com/7.x/bottts/svg?seed=MoriartyLogo&backgroundColor=6e3bfa" alt="Moriarty logo" class="sidebar-logo">
+        <div class="sidebar-title-wrap">
+          <h2 class="brand-text sidebar-title">Moriarty</h2>
+          <span class="sidebar-subtitle">GTA5RP Cabinet</span>
+        </div>
+      </div>
+
+      <!-- Links menu -->
+      <ul class="nav-menu">
+        <li class="nav-item">
+          <a class="nav-link" [class.active]="currentTab() === 'stats'" (click)="switchTab('stats')">
+            <i class="fa-solid fa-chart-simple"></i> Статистика
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" [class.active]="currentTab() === 'balance'" (click)="switchTab('balance')">
+            <i class="fa-solid fa-gem"></i> Баланс
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" [class.active]="currentTab() === 'warns'" (click)="switchTab('warns')">
+            <i class="fa-solid fa-triangle-exclamation"></i> Варны
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" [class.active]="currentTab() === 'feedback'" (click)="switchTab('feedback')">
+            <i class="fa-solid fa-comments"></i> Фидбек
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" [class.active]="currentTab() === 'referrals'" (click)="switchTab('referrals')">
+            <i class="fa-solid fa-user-plus"></i> Рефералы
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" [class.active]="currentTab() === 'ai-assistant'" (click)="switchTab('ai-assistant')">
+            <i class="fa-solid fa-robot"></i> Раб Володя <span class="slave-badge">ИИ</span>
+          </a>
+        </li>
+        <!-- Only visible for OWNER and Developer roles -->
+        @if (isUserAdmin()) {
+          <li class="nav-item admin-only">
+            <a class="nav-link" [class.active]="currentTab() === 'admin'" (click)="switchTab('admin')">
+              <i class="fa-solid fa-shield-halved"></i> Админка
+            </a>
+          </li>
+        }
+        <li class="nav-item">
+          <a class="nav-link" [class.active]="currentTab() === 'settings'" (click)="switchTab('settings')">
+            <i class="fa-solid fa-gears"></i> Подключение
+          </a>
+        </li>
+      </ul>
+
+      <!-- User Snippet footer -->
+      <div class="sidebar-footer">
+        <div class="user-snippet">
+          <div class="user-snippet-avatar">
+            {{ authService.currentUser()!.character_name.split('_').map(n => n[0]).join('').substring(0, 2).toUpperCase() }}
+          </div>
+          <div class="user-snippet-info">
+            <div class="user-snippet-name">{{ authService.currentUser()!.character_name }}</div>
+            <div class="user-snippet-role">{{ authService.currentUser()!.role }}</div>
+          </div>
+          <button class="btn-logout" (click)="handleLogout()" title="Выйти">
+            <i class="fa-solid fa-power-off"></i>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Panel Area -->
+    <main class="main-content">
+      
+      <!-- Top header bar -->
+      <header class="main-header">
+        <button class="mobile-nav-toggle" (click)="toggleSidebar()">
+          <i class="fa-solid fa-bars"></i>
+        </button>
+        <div class="header-title-wrap">
+          @switch (currentTab()) {
+            @case ('stats') {
+              <h1>Статистика</h1>
+              <p>Основная информация вашего персонажа в семье Moriarty</p>
+            }
+            @case ('balance') {
+              <h1>Семейный Баланс</h1>
+              <p>Управление денежным счетом, пополнения и переводы</p>
+            }
+            @case ('warns') {
+              <h1>Выговоры (Варны)</h1>
+              <p>Активные замечания, выданные администрацией семьи</p>
+            }
+            @case ('feedback') {
+              <h1>Обратная Связь</h1>
+              <p>Жалобы на участников фракции и предложения по улучшению</p>
+            }
+            @case ('referrals') {
+              <h1>Реферальная Сеть</h1>
+              <p>Приглашайте друзей и получайте взаимные вознаграждения</p>
+            }
+            @case ('ai-assistant') {
+              <h1>Раб Володя</h1>
+              <p>Личный слуга и ИИ-помощник семьи Moriarty</p>
+            }
+            @case ('admin') {
+              <h1>Админка Кабинета</h1>
+              <p>Панель управления составом и изменением настроек ассистента</p>
+            }
+            @case ('settings') {
+              <h1>Параметры Подключения</h1>
+              <p>Интеграция с базой данных Supabase и Google Gemini API</p>
+            }
+          }
+        </div>
+        <div class="header-actions">
+          <div class="server-badge">Murrieta</div>
+          <div class="connection-status" [class.demo]="!configState().isSupabaseMode">
+            <span class="status-dot"></span>
+            <span>{{ configState().isSupabaseMode ? 'Supabase БД' : 'Демо-режим' }}</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- ==========================================================================
+           TAB SWITCH PANELS
+           ========================================================================== -->
+      @switch (currentTab()) {
+        
+        <!-- === TAB: STATS === -->
+        @case ('stats') {
+          <section class="tab-panel active">
+            <div class="glass-panel stats-banner glow-purple">
+              <div class="avatar-large">
+                {{ authService.currentUser()!.character_name.split('_').map(n => n[0]).join('').substring(0, 2).toUpperCase() }}
+              </div>
+              <div class="banner-profile-info">
+                <h2 class="char-title">{{ authService.currentUser()!.character_name }}</h2>
+                <span class="char-static">CID: {{ authService.currentUser()!.static_id }}</span>
+              </div>
+              <div class="banner-stats">
+                <div class="banner-stat-item">
+                  <div class="banner-stat-value">128ч</div>
+                  <div class="banner-stat-label">В игре</div>
+                </div>
+                <div class="banner-stat-item">
+                  <div class="banner-stat-value">4,250</div>
+                  <div class="banner-stat-label">Очки Семьи</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid-stats">
+              <div class="glass-panel stat-card">
+                <div class="stat-icon"><i class="fa-solid fa-crown"></i></div>
+                <div class="stat-details">
+                  <div class="stat-val">
+                    @if (authService.currentUser()!.role === 'OWNER') { Босс семьи (OWNER) }
+                    @else if (authService.currentUser()!.role === 'Developer') { Разработчик (Dev) }
+                    @else if (authService.currentUser()!.role === 'MODERATOR') { Капо семьи (Mod) }
+                    @else { Участник (Member) }
+                  </div>
+                  <div class="stat-lbl">Ранг в семье</div>
+                </div>
+              </div>
+              <div class="glass-panel stat-card">
+                <div class="stat-icon"><i class="fa-solid fa-wallet"></i></div>
+                <div class="stat-details">
+                  <div class="stat-val">${{ authService.currentUser()!.balance.toLocaleString() }}</div>
+                  <div class="stat-lbl">Доступный баланс</div>
+                </div>
+              </div>
+              <div class="glass-panel stat-card">
+                <div class="stat-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <div class="stat-details">
+                  <div class="stat-val">{{ authService.currentUser()!.warns_count }} / 3</div>
+                  <div class="stat-lbl">Активные варны</div>
+                </div>
+              </div>
+              <div class="glass-panel stat-card">
+                <div class="stat-icon"><i class="fa-solid fa-calendar-check"></i></div>
+                <div class="stat-details">
+                  <div class="stat-val">{{ authService.currentUser()!.created_at | date:'dd.MM.yyyy' }}</div>
+                  <div class="stat-lbl">Дата вступления</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- === TAB: BALANCE === -->
+        @case ('balance') {
+          <section class="tab-panel active">
+            <div class="balance-widget">
+              <div class="glass-panel balance-card-glowing">
+                <span class="sidebar-subtitle">Ваш счет в семье</span>
+                <div class="balance-huge">${{ authService.currentUser()!.balance.toLocaleString() }}</div>
+                <div class="balance-actions">
+                  <button class="btn-primary" (click)="openModal('deposit')">
+                    <i class="fa-solid fa-circle-plus"></i> Пополнить баланс
+                  </button>
+                  <button class="btn-secondary" (click)="openModal('transfer')">
+                    <i class="fa-solid fa-paper-plane"></i> Перевод другу
+                  </button>
+                </div>
+              </div>
+
+              <div class="glass-panel" style="display: flex; flex-direction: column; justify-content: center; gap: 1rem;">
+                <h3 style="font-size: 1rem; color: var(--text-secondary); text-transform: uppercase;">Лимиты и комиссии</h3>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
+                  <span style="color: var(--text-muted);">Комиссия семьи</span>
+                  <span style="font-weight: 600; color: var(--success);">0%</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 8px;">
+                  <span style="color: var(--text-muted);">Лимит на перевод</span>
+                  <span style="font-weight: 600;">$1,000,000 / сут</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding-bottom: 8px;">
+                  <span style="color: var(--text-muted);">Статус банка</span>
+                  <span style="font-weight: 600; color: var(--accent-cyan);">Активен</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="glass-panel" style="margin-top: 2rem;">
+              <h3 style="margin-bottom: 1.25rem; font-size: 1.1rem; display: flex; align-items: center; gap: 10px;">
+                <i class="fa-solid fa-clock-rotate-left" style="color: var(--primary);"></i> История транзакций
+              </h3>
+              <div class="ledger-wrapper">
+                @for (tx of transactions(); track tx.id) {
+                  <div class="ledger-item">
+                    <div class="ledger-left">
+                      <div class="ledger-badge" [ngClass]="tx.type.toLowerCase()">
+                        @if (tx.type === 'DEPOSIT') {
+                          <i class="fa-solid fa-plus-circle"></i>
+                        } @else if (tx.type === 'WITHDRAW') {
+                          <i class="fa-solid fa-minus-circle"></i>
+                        } @else {
+                          <i class="fa-solid fa-paper-plane"></i>
+                        }
+                      </div>
+                      <div class="ledger-info">
+                        <span class="ledger-desc">{{ tx.description }}</span>
+                        <span class="ledger-date">{{ tx.created_at | date:'dd.MM HH:mm' }}</span>
+                      </div>
+                    </div>
+                    <div class="ledger-amount" [class.plus]="tx.amount > 0" [class.minus]="tx.amount < 0">
+                      {{ tx.amount > 0 ? '+' : '' }}${{ tx.amount.toLocaleString() }}
+                    </div>
+                  </div>
+                } @empty {
+                  <div style="color: var(--text-muted); text-align: center; padding: 2rem;">Транзакций пока нет.</div>
+                }
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- === TAB: WARNS === -->
+        @case ('warns') {
+          <section class="tab-panel active">
+            <div class="warns-dashboard">
+              <div class="glass-panel warn-visual-box">
+                <div class="warn-counter-dial">
+                  <span class="warn-counter-inner">{{ authService.currentUser()!.warns_count }}</span>
+                </div>
+                <h2 style="font-size: 1.2rem; margin-bottom: 8px;">Семейные Выговоры</h2>
+                <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">
+                  При получении <strong>3 активных варнов</strong> вы будете автоматически исключены из семьи Moriarty.
+                </p>
+              </div>
+
+              <div class="glass-panel">
+                <h3 style="margin-bottom: 1.25rem; font-size: 1.1rem; display: flex; align-items: center; gap: 10px;">
+                  <i class="fa-solid fa-list-check" style="color: var(--danger);"></i> Активные и архивные выговоры
+                </h3>
+                <div class="warns-list">
+                  @for (w of warns(); track w.id) {
+                    <div class="warn-item" [class.expired]="w.status === 'EXPIRED'">
+                      <div class="warn-item-left">
+                        <div class="warn-item-icon">
+                          <i class="{{ w.status === 'EXPIRED' ? 'fa-regular fa-circle-check' : 'fa-solid fa-triangle-exclamation' }}"></i>
+                        </div>
+                        <div class="warn-item-details">
+                          <span class="warn-reason">{{ w.reason }}</span>
+                          <span class="warn-meta">Выдал: {{ w.issued_by }} | Дата: {{ w.issued_at | date:'dd.MM.yyyy' }}</span>
+                        </div>
+                      </div>
+                      <div class="warn-badge-status" [ngClass]="w.status.toLowerCase()">
+                        {{ w.status === 'EXPIRED' ? 'Снят' : 'Активен' }}
+                      </div>
+                    </div>
+                  } @empty {
+                    <div style="color: var(--text-muted); text-align: center; padding: 3rem;">У вас нет выговоров. Отличная работа!</div>
+                  }
+                </div>
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- === TAB: FEEDBACK === -->
+        @case ('feedback') {
+          <section class="tab-panel active">
+            <div class="feedback-container">
+              <div class="glass-panel feedback-form-box glow-purple">
+                <h3 style="margin-bottom: 1rem; font-size: 1.1rem;">Оставить фидбек</h3>
+                <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.4;">
+                  Вы можете отправить рацпредложение по улучшению семьи или написать жалобу на другого участника. Жалобы рассматриваются только руководством.
+                </p>
+
+                <div class="feedback-type-selector">
+                  <div class="type-tab" [class.active]="feedbackType() === 'SUGGESTION'" (click)="switchFeedbackType('SUGGESTION')">
+                    <i class="fa-solid fa-lightbulb"></i> Предложение
+                  </div>
+                  <div class="type-tab complaint" [class.active]="feedbackType() === 'COMPLAINT'" (click)="switchFeedbackType('COMPLAINT')">
+                    <i class="fa-solid fa-circle-user"></i> Жалоба
+                  </div>
+                </div>
+
+                <form (submit)="handleFeedbackSubmit(); $event.preventDefault()">
+                  @if (feedbackType() === 'COMPLAINT') {
+                    <div class="form-group">
+                      <label for="feedbackTarget">Никнейм нарушителя (Имя_Фамилия или ID)</label>
+                      <input type="text" id="feedbackTarget" class="input-glow" placeholder="John_Doe" [(ngModel)]="feedbackForm.targetMember" name="target" required>
+                    </div>
+                  }
+
+                  <div class="form-group">
+                    <label for="feedbackText">Текст обращения</label>
+                    <textarea id="feedbackText" class="input-glow textarea-prompt" placeholder="Опишите ваше предложение или детали нарушения..." [(ngModel)]="feedbackForm.text" name="text" required></textarea>
+                  </div>
+
+                  <button type="submit" class="btn-primary" style="width: 100%;">
+                    <i class="fa-solid fa-paper-plane"></i> Отправить на рассмотрение
+                  </button>
+                </form>
+              </div>
+
+              <div class="glass-panel">
+                <h3 style="margin-bottom: 1.25rem; font-size: 1.1rem; display: flex; align-items: center; gap: 10px;">
+                  <i class="fa-solid fa-clock-rotate-left" style="color: var(--primary);"></i> Ваши обращения
+                </h3>
+                <div class="feedback-history-list">
+                  @for (fb of feedback(); track fb.id) {
+                    <div class="feedback-card">
+                      <div class="feedback-card-header">
+                        <span class="feedback-badge-type" [ngClass]="fb.type.toLowerCase()">{{ fb.type === 'SUGGESTION' ? 'Предложение' : 'Жалоба' }}</span>
+                        <span class="feedback-status" [ngClass]="fb.status.toLowerCase()">
+                          <i class="fa-solid fa-circle-dot" style="font-size:0.55rem;"></i>
+                          {{ fb.status === 'PENDING' ? 'Ожидание' : fb.status === 'APPROVED' ? 'Одобрено' : 'Отклонено' }}
+                        </span>
+                      </div>
+                      <div class="feedback-card-text">{{ fb.text }}</div>
+                      @if (fb.target_member) {
+                        <span class="feedback-target">Нарушитель: {{ fb.target_member }}</span>
+                      }
+                      <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Дата обращения: {{ fb.created_at | date:'dd.MM.yyyy' }}</div>
+                      @if (fb.admin_comment) {
+                        <div class="feedback-comment"><strong>Руководство:</strong> {{ fb.admin_comment }}</div>
+                      }
+                    </div>
+                  } @empty {
+                    <div style="color: var(--text-muted); text-align: center; padding: 3rem;">Вы пока не отправляли обращений.</div>
+                  }
+                </div>
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- === TAB: REFERRALS === -->
+        @case ('referrals') {
+          <section class="tab-panel active">
+            <div class="referral-widget">
+              <div class="glass-panel ref-code-box glow-purple">
+                <i class="fa-solid fa-gift" style="font-size: 3.5rem; color: var(--accent-cyan); text-shadow: 0 0 20px rgba(0, 240, 255, 0.3); margin-bottom: 1rem;"></i>
+                <h2 style="font-size: 1.3rem;">Ваш реферальный код</h2>
+                <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4; margin-top: 6px;">
+                  Поделись этим кодом с новым игроком. При его регистрации в кабинете вы оба получите бонусные <strong>$10,000</strong> на баланс!
+                </p>
+                <div class="ref-code-display" (click)="copyReferralCode()">MORI-{{ authService.currentUser()!.static_id }}</div>
+                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 8px;">Нажмите на код, чтобы скопировать</div>
+              </div>
+
+              <div class="glass-panel ref-list-box">
+                <h3 style="margin-bottom: 1.25rem; font-size: 1.1rem; display: flex; align-items: center; gap: 10px;">
+                  <i class="fa-solid fa-people-group" style="color: var(--primary);"></i> Приглашенные друзья
+                </h3>
+                <div class="ref-players-list">
+                  @for (friend of referrals(); track friend.id) {
+                    <div class="ref-player-item">
+                      <div class="ref-player-name">{{ friend.character_name }} (CID: {{ friend.static_id }})</div>
+                      <div class="ref-player-reward">+$10,000 Получено</div>
+                    </div>
+                  } @empty {
+                    <div style="color: var(--text-muted); text-align: center; padding: 3rem;">Вы пока никого не пригласили.</div>
+                  }
+                </div>
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- === TAB: VOLODYA AI CHAT === -->
+        @case ('ai-assistant') {
+          <section class="tab-panel active">
+            <div class="chat-container glass-panel glow-purple" style="padding: 0; overflow: hidden;">
+              <div class="chat-banner">
+                <div class="chat-banner-left">
+                  <div class="chat-banner-avatar">🤖</div>
+                  <div class="chat-banner-info">
+                    <h3>Личный раб Володя</h3>
+                    <span class="chat-banner-status">В рабстве / онлайн</span>
+                  </div>
+                </div>
+                <div class="slave-badge"><i class="fa-solid fa-chains"></i> MORIARTY SLAVE</div>
+              </div>
+
+              <!-- Messages board -->
+              <div class="chat-messages" #chatMessagesContainer>
+                @for (msg of aiService.messages(); track msg.timestamp) {
+                  <div class="chat-bubble" [ngClass]="msg.role">
+                    <div class="chat-bubble-content" [innerHTML]="msg.text"></div>
+                    <span class="chat-bubble-time">{{ msg.timestamp | date:'HH:mm' }}</span>
+                  </div>
+                }
+                
+                @if (aiService.isTyping()) {
+                  <div class="chat-typing">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                }
+              </div>
+
+              <div class="chat-input-area">
+                <input type="text" class="chat-input" placeholder="Напишите приказ для Володю..." [(ngModel)]="chatMessageInput" (keypress)="handleChatKeyPress($event)" name="chatMessage">
+                <button class="btn-send" (click)="sendChatMessage()" id="btnSendChat">
+                  <i class="fa-solid fa-paper-plane"></i>
+                </button>
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- === TAB: ADMIN === -->
+        @case ('admin') {
+          @if (isUserAdmin()) {
+            <section class="tab-panel active">
+              <div class="admin-grid">
+                
+                <!-- Users search list -->
+                <div class="glass-panel admin-list-wrap">
+                  <h3 style="font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-users-gear" style="color: var(--primary);"></i> Управление составом
+                  </h3>
+                  <div class="search-bar-wrap">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" class="input-glow search-input" placeholder="Поиск по нику или CID..." [ngModel]="adminSearchQuery()" (ngModelChange)="adminSearchQuery.set($event)">
+                  </div>
+                  <div class="admin-users-list">
+                    @for (u of filteredAdminUsers(); track u.id) {
+                      <div class="admin-user-card" [class.active]="selectedAdminUser()?.id === u.id" (click)="selectAdminUser(u)">
+                        <div class="admin-user-left">
+                          <div class="admin-user-avatar">
+                            {{ u.character_name.split('_').map(n => n[0]).join('').substring(0, 2).toUpperCase() }}
+                          </div>
+                          <div class="admin-user-info">
+                            <span class="admin-user-name">{{ u.character_name }}</span>
+                            <span class="admin-user-static">CID: {{ u.static_id }}</span>
+                          </div>
+                        </div>
+                        <span class="admin-user-role-badge" [ngClass]="u.role.toLowerCase()">{{ u.role }}</span>
+                      </div>
+                    } @empty {
+                      <div style="color: var(--text-muted); text-align: center; padding: 2rem;">Пользователи не найдены.</div>
+                    }
+                  </div>
+                </div>
+
+                <!-- Admin settings forms -->
+                <div class="glass-panel" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                  <h3 style="font-size: 1.1rem; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 12px;">
+                    <i class="fa-solid fa-sliders" style="color: var(--accent-cyan);"></i> Настройки и Права
+                  </h3>
+
+                  <!-- Selected user details -->
+                  <div class="admin-details-form">
+                    @if (selectedAdminUser()) {
+                      <div>
+                        <div class="admin-details-header" style="margin-bottom: 1.25rem;">
+                          <div class="details-avatar-huge">
+                            {{ selectedAdminUser()!.character_name.split('_').map(n => n[0]).join('').substring(0, 2).toUpperCase() }}
+                          </div>
+                          <div class="details-info-wrap">
+                            <div class="details-name">{{ selectedAdminUser()!.character_name }}</div>
+                            <div class="details-static">CID: {{ selectedAdminUser()!.static_id }}</div>
+                          </div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                          <div class="form-group">
+                            <label for="adminUserRoleSelect">Семейный статус / Роль</label>
+                            <select id="adminUserRoleSelect" class="input-glow" style="cursor: pointer;" [(ngModel)]="adminForm.role" name="adminRole">
+                              <option value="MEMBER">MEMBER (Участник)</option>
+                              <option value="MODERATOR">MODERATOR (Модератор)</option>
+                              <option value="Developer">Developer (Разработчик)</option>
+                              <option value="OWNER">OWNER (Владелец)</option>
+                            </select>
+                          </div>
+                          <div class="form-group">
+                            <label for="adminUserWarnsInput">Количество варнов</label>
+                            <input type="number" id="adminUserWarnsInput" class="input-glow" min="0" max="3" [(ngModel)]="adminForm.warns" name="adminWarns">
+                          </div>
+                        </div>
+
+                        <div class="form-group">
+                          <label for="adminUserBalanceInput">Семейный Баланс ($)</label>
+                          <input type="number" id="adminUserBalanceInput" class="input-glow" min="0" [(ngModel)]="adminForm.balance" name="adminBalance">
+                        </div>
+
+                        <button class="btn-primary" (click)="saveAdminUserSettings()" style="width: 100%;">
+                          <i class="fa-solid fa-floppy-disk"></i> Сохранить изменения пользователя
+                        </button>
+                      </div>
+                    } @else {
+                      <div style="color: var(--text-secondary); text-align: center; padding: 2rem;">Выберите участника из списка слева для управления его профилем.</div>
+                    }
+                  </div>
+
+                  <!-- Global prompt tuning editor -->
+                  <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.05);">
+                    <h3 style="font-size: 1.05rem; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                      <i class="fa-solid fa-code" style="color: var(--secondary);"></i> Системный промпт Володя
+                    </h3>
+                    <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
+                      Настройка характера, манеры общения и преданности ИИ-ассистента. Будет применено мгновенно для всех.
+                    </p>
+                    <div class="form-group">
+                      <textarea class="input-glow textarea-prompt" [ngModel]="adminSystemPrompt()" (ngModelChange)="adminSystemPrompt.set($event)"></textarea>
+                    </div>
+                    <button class="btn-primary" style="background: linear-gradient(135deg, var(--secondary) 0%, var(--accent-pink) 100%); box-shadow: 0 4px 15px rgba(182,59,250,0.3); width: 100%;" (click)="saveAdminSystemPrompt()">
+                      <i class="fa-solid fa-brain"></i> Обновить разум раба Володи
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+            </section>
+          }
+        }
+
+        <!-- === TAB: SETTINGS === -->
+        @case ('settings') {
+          <section class="tab-panel active">
+            <div class="settings-wrapper glass-panel glow-purple">
+              <h2 style="font-size: 1.35rem; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+                <i class="fa-solid fa-circle-nodes" style="color: var(--accent-cyan);"></i> Параметры Подключения
+              </h2>
+              <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.4;">
+                Для полноценной работы бэкенда настройте базу данных **Supabase** и ключ **Gemini API**. Все ключи будут сохранены сервером в файле <code>config.json</code> и надежно изолированы от клиентов.
+              </p>
+
+              <form (submit)="handleConnectionSave(); $event.preventDefault()">
+                <div class="form-group">
+                  <label for="setGeminiKey">Google Gemini API Key</label>
+                  <input type="password" id="setGeminiKey" class="input-glow" placeholder="Введите API ключ (будет перезаписан)" [(ngModel)]="connectionForm.geminiApiKey" name="geminiKey">
+                  <span style="font-size: 0.72rem; color: var(--text-muted);">
+                    @if (configState().hasGeminiApiKey) { Ключ сохранен на сервере (замаскирован). }
+                    @else { Не настроено. Получить можно в Google AI Studio бесплатно. }
+                  </span>
+                </div>
+
+                <div class="form-group">
+                  <label for="setSupabaseUrl">Supabase URL</label>
+                  <input type="text" id="setSupabaseUrl" class="input-glow" placeholder="https://xxxxxxxxxxxxxxxxxxxx.supabase.co" [(ngModel)]="connectionForm.supabaseUrl" name="sbUrl">
+                </div>
+
+                <div class="form-group">
+                  <label for="setSupabaseAnonKey">Supabase Anon Key</label>
+                  <input type="password" id="setSupabaseAnonKey" class="input-glow" placeholder="Введите Anon Key (будет перезаписан)" [(ngModel)]="connectionForm.supabaseAnonKey" name="sbKey">
+                  <span style="font-size: 0.72rem; color: var(--text-muted);">
+                    @if (configState().isSupabaseMode) { Ключ сохранен на сервере: {{ configState().supabaseAnonKeyObfuscated }} }
+                    @else { Не настроено. API базы данных недоступно. }
+                  </span>
+                </div>
+
+                <div style="display: flex; gap: 12px; margin-top: 1rem;">
+                  <button type="submit" class="btn-primary" style="flex: 1;">
+                    <i class="fa-solid fa-square-check"></i> Сохранить и подключиться
+                  </button>
+                  <button type="button" class="btn-secondary" (click)="clearConnectionSettings()">
+                    <i class="fa-solid fa-trash-can"></i> Сбросить ключи
+                  </button>
+                </div>
+              </form>
+
+              <div style="margin-top: 2rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); padding: 1.25rem; border-radius: 12px;">
+                <h4 style="font-size: 0.85rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px;">Статус серверных систем:</h4>
+                <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.8rem;">
+                  <div style="display: flex; justify-content: space-between;">
+                    <span>БД: Supabase</span>
+                    <span style="font-weight: bold; color: var(--warning);" [style.color]="configState().isSupabaseMode ? 'var(--success)' : 'var(--warning)'">
+                      {{ configState().isSupabaseMode ? 'ПОДКЛЮЧЕНО (ОБЛАКО)' : 'НЕДОСТУПНО (ЛОКАЛЬНЫЙ ДЕМО-ФАЙЛ)' }}
+                    </span>
+                  </div>
+                  <div style="display: flex; justify-content: space-between;">
+                    <span>ИИ: Gemini API</span>
+                    <span style="font-weight: bold; color: var(--warning);" [style.color]="configState().hasGeminiApiKey ? 'var(--success)' : 'var(--warning)'">
+                      {{ configState().hasGeminiApiKey ? 'АКТИВИРОВАНО (СЕРВЕР)' : 'ШАБЛОННЫЙ РЕЖИМ (БЕЗ КЛЮЧА)' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </section>
+        }
+      }
+    </main>
+  </div>
+
+  <!-- ==========================================================================
+       MODALS OVERLAYS
+       ========================================================================== -->
+  
+  <!-- MODAL: TRANSFER -->
+  <div class="modal-overlay" [class.active]="activeModals()['transfer']" id="modal-transfer">
+    <div class="modal-content glass-panel glow-purple">
+      <div class="modal-header">
+        <h3 class="modal-title">Семейный перевод средств</h3>
+        <button class="modal-close" (click)="closeModal('transfer')">&times;</button>
+      </div>
+      <form (submit)="handleTransferSubmit(); $event.preventDefault()">
+        <div class="form-group">
+          <label for="transferStaticId">CID Получателя (Static ID)</label>
+          <input type="text" id="transferStaticId" class="input-glow" placeholder="Введите CID друга" [(ngModel)]="transferForm.targetStaticId" name="targetCID" required>
+        </div>
+        <div class="form-group">
+          <label for="transferAmount">Сумма перевода ($)</label>
+          <input type="number" id="transferAmount" class="input-glow" placeholder="Мин. $1" min="1" [(ngModel)]="transferForm.amount" name="amountVal" required>
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; margin-top: 1rem;">
+          <i class="fa-solid fa-paper-plane"></i> Совершить перевод
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: DEPOSIT -->
+  <div class="modal-overlay" [class.active]="activeModals()['deposit']" id="modal-deposit">
+    <div class="modal-content glass-panel glow-purple">
+      <div class="modal-header">
+        <h3 class="modal-title">Пополнение баланса</h3>
+        <button class="modal-close" (click)="closeModal('deposit')">&times;</button>
+      </div>
+      <form (submit)="handleDepositSubmit(); $event.preventDefault()">
+        <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 1.25rem;">
+          Пополнение счета фиксируется на сервере. Введите сумму вашего вклада в семейную казну для отслеживания руководством.
+        </p>
+        <div class="form-group">
+          <label for="depositAmount">Сумма вклада ($)</label>
+          <input type="number" id="depositAmount" class="input-glow" placeholder="Например: 10000" min="1" [(ngModel)]="depositForm.amount" name="depAmount" required>
+        </div>
+        <button type="submit" class="btn-primary" style="width: 100%; margin-top: 1rem;">
+          <i class="fa-solid fa-check-circle"></i> Зафиксировать вклад
+        </button>
+      </form>
+    </div>
+  </div>
+}

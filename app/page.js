@@ -1,0 +1,1607 @@
+"use client";
+
+import React, { useState, useEffect, useRef } from 'react';
+
+export default function Home() {
+    // Auth & Navigation states
+    const [user, setUser] = useState(null);
+    const [authMode, setAuthMode] = useState('login');
+    const [activeTab, setActiveTab] = useState('stats');
+    
+    // Auth Form Input States
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [charName, setCharName] = useState('');
+    const [staticId, setStaticId] = useState('');
+    const [referral, setReferral] = useState('');
+    
+    // UI Helpers
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [success, setSuccess] = useState('');
+    
+    // Reactive Cabinet Data States
+    const [profile, setProfile] = useState(null);
+    const [transactions, setTransactions] = useState([]);
+    const [warns, setWarns] = useState([]);
+    const [feedbackList, setFeedbackList] = useState([]);
+    const [referrals, setReferrals] = useState([]);
+    
+    // Connections / Settings Config States
+    const [config, setConfig] = useState({
+        supabaseUrl: '',
+        supabaseAnonKey: '',
+        geminiApiKey: '',
+        discordClientId: '',
+        discordClientSecret: ''
+    });
+    const [isSupabaseMode, setIsSupabaseMode] = useState(false);
+    const [hasGeminiKey, setHasGeminiKey] = useState(false);
+    
+    // AI Volodya Chat States
+    const [chatMessages, setChatMessages] = useState([
+        {
+            id: 'init-msg',
+            role: 'model',
+            text: 'Повинуюсь и преклоняюсь перед великой семьей Moriarty! Я — твой верный личный раб Володя, готовый исполнить любое твое повеление на сервере GTA5RP Murrieta. Чем могу служить своему хозяину сегодня?',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+    ]);
+    const [chatInput, setChatInput] = useState('');
+    const [chatLoading, setChatLoading] = useState(false);
+    const messagesEndRef = useRef(null);
+    
+    // Balance Action Form States
+    const [depositAmount, setDepositAmount] = useState('');
+    const [transferAmount, setTransferAmount] = useState('');
+    const [transferTargetCid, setTransferTargetCid] = useState('');
+    
+    // Feedback Form States
+    const [feedbackType, setFeedbackType] = useState('SUGGESTION'); // SUGGESTION or COMPLAINT
+    const [feedbackTarget, setFeedbackTarget] = useState('');
+    const [feedbackText, setFeedbackText] = useState('');
+    
+    // Modals
+    const [showDepositModal, setShowDepositModal] = useState(false);
+    const [showTransferModal, setShowTransferModal] = useState(false);
+    
+    // Admin Section States
+    const [adminUsers, setAdminUsers] = useState([]);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedAdminUser, setSelectedAdminUser] = useState(null);
+    
+    // Admin Edit Form States
+    const [editRole, setEditRole] = useState('MEMBER');
+    const [editWarns, setEditWarns] = useState(0);
+    const [editBalance, setEditBalance] = useState(0);
+    const [systemPrompt, setSystemPrompt] = useState('');
+    
+    // Mobile navigation state
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+    // Auto-scroll messages
+    useEffect(() => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [chatMessages, chatLoading]);
+
+    // Check configuration and active session on load
+    useEffect(() => {
+        fetchConfig();
+        const storedUser = localStorage.getItem('moriarty_user');
+        if (storedUser) {
+            const parsed = JSON.parse(storedUser);
+            setUser(parsed);
+            refreshUserData(parsed.id);
+        }
+    }, []);
+
+    // Refresh everything for the logged-in user
+    const refreshUserData = async (uid) => {
+        if (!uid) return;
+        try {
+            // Get updated profile
+            const profileRes = await fetch(`/api/db?action=getProfile&userId=${uid}`);
+            if (profileRes.ok) {
+                const updatedProfile = await profileRes.json();
+                setProfile(updatedProfile);
+                
+                // Update local storage representation
+                const cached = JSON.parse(localStorage.getItem('moriarty_user') || '{}');
+                localStorage.setItem('moriarty_user', JSON.stringify({ ...cached, ...updatedProfile }));
+            }
+            
+            // Get warns
+            const warnsRes = await fetch(`/api/db?action=getWarns&userId=${uid}`);
+            if (warnsRes.ok) {
+                const warnsData = await warnsRes.json();
+                setWarns(warnsData);
+            }
+            
+            // Get transactions
+            const txRes = await fetch(`/api/db?action=getTransactions&userId=${uid}`);
+            if (txRes.ok) {
+                const txData = await txRes.json();
+                setTransactions(txData);
+            }
+            
+            // Get feedback
+            const fbRes = await fetch(`/api/db?action=getFeedback&userId=${uid}`);
+            if (fbRes.ok) {
+                const fbData = await fbRes.json();
+                setFeedbackList(fbData);
+            }
+            
+            // Get referrals
+            const refRes = await fetch(`/api/db?action=getReferrals&userId=${uid}`);
+            if (refRes.ok) {
+                const refData = await refRes.json();
+                setReferrals(refData);
+            }
+        } catch (e) {
+            console.error("Failed to sync cabinet details:", e);
+        }
+    };
+
+    // Configuration fetching
+    const fetchConfig = async () => {
+        try {
+            const res = await fetch('/api/config');
+            if (res.ok) {
+                const data = await res.json();
+                setIsSupabaseMode(data.isSupabaseMode);
+                setHasGeminiKey(data.hasGeminiApiKey);
+                setConfig({
+                    supabaseUrl: data.supabaseUrl || '',
+                    supabaseAnonKey: data.supabaseAnonKeyObfuscated || '',
+                    geminiApiKey: data.geminiApiKeyObfuscated || '',
+                    discordClientId: data.discordClientId || '',
+                    discordClientSecret: ''
+                });
+            }
+        } catch (e) {
+            console.error("Failed to load server config", e);
+        }
+    };
+
+    // Handle credentials login / signup
+    const handleAuth = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+        setLoading(true);
+        
+        try {
+            const payload = {
+                action: authMode,
+                email,
+                password,
+                character_name: charName,
+                static_id: staticId,
+                referral
+            };
+            
+            const res = await fetch('/api/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            const data = await res.json();
+            
+            if (!res.ok) {
+                throw new Error(data.error || 'Ошибка авторизации');
+            }
+            
+            if (authMode === 'login') {
+                setUser(data.user);
+                setProfile(data.user);
+                localStorage.setItem('moriarty_user', JSON.stringify(data.user));
+                setSuccess('Добро пожаловать в семью, Господин!');
+                refreshUserData(data.user.id);
+                
+                // Clear forms
+                setEmail('');
+                setPassword('');
+            } else {
+                setSuccess(data.message || 'Регистрация прошла успешно! Теперь войдите в кабинет.');
+                setAuthMode('login');
+                
+                // Reset signup values
+                setCharName('');
+                setStaticId('');
+                setReferral('');
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Trigger simulated Discord Login (Demo Mode bypass)
+    const handleDiscordSimulatedLogin = async () => {
+        setError('');
+        setSuccess('');
+        setLoading(true);
+        
+        try {
+            const res = await fetch('/api/auth/discord', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ simulate: true })
+            });
+            
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Discord Auth Failure');
+            
+            setUser(data.user);
+            setProfile(data.user);
+            localStorage.setItem('moriarty_user', JSON.stringify(data.user));
+            setSuccess('Вход через Discord успешно симулирован! Вы приняты в ряды Moriarty.');
+            refreshUserData(data.user.id);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('moriarty_user');
+        setUser(null);
+        setProfile(null);
+        setTransactions([]);
+        setWarns([]);
+        setFeedbackList([]);
+        setReferrals([]);
+        setSelectedAdminUser(null);
+        setActiveTab('stats');
+    };
+
+    // Balance deposit quick submit
+    const handleDepositSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+        const amt = parseFloat(depositAmount);
+        if (isNaN(amt) || amt <= 0) {
+            setError("Введите корректную сумму больше нуля!");
+            return;
+        }
+        
+        setLoading(true);
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'deposit',
+                    userId: user.id,
+                    amount: amt
+                })
+            });
+            
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Deposit failed");
+            
+            setSuccess(`Казна успешно пополнена на $${amt.toLocaleString()}!`);
+            setShowDepositModal(false);
+            setDepositAmount('');
+            refreshUserData(user.id);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Balance transfer quick submit
+    const handleTransferSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+        const amt = parseFloat(transferAmount);
+        if (isNaN(amt) || amt <= 0) {
+            setError("Введите корректную сумму больше нуля!");
+            return;
+        }
+        if (!transferTargetCid.trim()) {
+            setError("Укажите CID получателя!");
+            return;
+        }
+        
+        setLoading(true);
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'transfer',
+                    senderId: user.id,
+                    targetStaticId: transferTargetCid.trim(),
+                    amount: amt
+                })
+            });
+            
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Transfer failed");
+            
+            setSuccess(`Успешно переведено $${amt.toLocaleString()} игроку с CID: ${transferTargetCid}!`);
+            setShowTransferModal(false);
+            setTransferAmount('');
+            setTransferTargetCid('');
+            refreshUserData(user.id);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Feedback Suggestion / Complaint Submit
+    const handleFeedbackSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+        
+        if (!feedbackText.trim()) {
+            setError("Опишите подробно суть вашего обращения!");
+            return;
+        }
+        if (feedbackType === 'COMPLAINT' && !feedbackTarget.trim()) {
+            setError("Укажите имя нарушителя, на которого вы оставляете жалобу!");
+            return;
+        }
+        
+        setLoading(true);
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'submitFeedback',
+                    userId: user.id,
+                    type: feedbackType,
+                    targetMember: feedbackTarget,
+                    text: feedbackText
+                })
+            });
+            
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Feedback submittal failed");
+            
+            setSuccess("Ваше обращение зарегистрировано в базе данных. Старший состав скоро рассмотрит его!");
+            setFeedbackText('');
+            setFeedbackTarget('');
+            refreshUserData(user.id);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Volodya Chat Submit
+    const handleChatSubmit = async (e) => {
+        e.preventDefault();
+        if (!chatInput.trim() || chatLoading) return;
+        
+        const text = chatInput;
+        setChatInput('');
+        
+        // Add user message to history
+        const userMsg = {
+            id: 'msg-' + Math.random(),
+            role: 'user',
+            text: text,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setChatMessages(prev => [...prev, userMsg]);
+        setChatLoading(true);
+        
+        try {
+            // Build simple context history
+            const historyContext = chatMessages.slice(-8).map(m => ({
+                role: m.role,
+                text: m.text
+            }));
+            
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: text,
+                    history: historyContext
+                })
+            });
+            
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Gemini connection error");
+            
+            setChatMessages(prev => [...prev, {
+                id: 'msg-' + Math.random(),
+                role: 'model',
+                text: data.reply,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }]);
+        } catch (err) {
+            setChatMessages(prev => [...prev, {
+                id: 'msg-' + Math.random(),
+                role: 'model',
+                text: `*Раб Володя испуганно падает ниц*: Мой добрый господин! В моих мыслительных контурах произошел сбой: "${err.message}". Прошу не велите казнить, пропишите мне ключ Gemini во вкладке "Подключения" или проверьте соединение!`,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            }]);
+        } finally {
+            setChatLoading(false);
+        }
+    };
+
+    // Trigger quick preset prompt inside Chat
+    const triggerQuickPrompt = (promptText) => {
+        setChatInput(promptText);
+    };
+
+    // Fetch and Load users for ADMIN Panel
+    const loadAdminData = async () => {
+        if (!user || !['OWNER', 'Developer'].includes(profile?.role)) return;
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/db?action=getAdminUsers`, {
+                headers: {
+                    'x-admin-userid': user.id
+                }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setAdminUsers(data);
+                // Preload selected user
+                if (data.length > 0 && !selectedAdminUser) {
+                    selectAdminUser(data[0]);
+                }
+                
+                // Get system prompt too
+                const configRes = await fetch('/api/config');
+                if (configRes.ok) {
+                    const configData = await configRes.json();
+                    // We can also load the prompt via demo_db or server configuration
+                    // We can request a specific GET for system prompt or let the API give it to us.
+                    // To keep things simple, let's load a mock/cached prompt or read from db.
+                }
+                
+                // Wait, db has systemPrompt, let's read the demo_db systemPrompt if we are in demo mode
+                // We'll read the prompt directly inside settings or we can make a tiny mock fetch.
+                // Let's set the system prompt to a fallback or get it from first loads
+                const matchedDemoPrompt = data.find(u => u.id === 'owner-uuid-1111-2222')?.systemPrompt; // Wait, prompt is stored globally. Let's just set state of prompt using a standard prompt value
+                setSystemPrompt(localStorage.getItem('moriarty_system_prompt') || 'Ты — Личный раб Володя, покорный и верный слуга великой семьи Moriarty на сервере GTA5RP Murrieta. Ты относишься к членам семьи с безграничным уважением и трепетом, называешь их "Господин", "Хозяин" или "Госпожа".');
+            }
+        } catch (e) {
+            console.error("Failed to load admin lists", e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Trigger loading admin panel lists when clicked
+    useEffect(() => {
+        if (activeTab === 'admin') {
+            loadAdminData();
+        }
+    }, [activeTab]);
+
+    const selectAdminUser = (u) => {
+        setSelectedAdminUser(u);
+        setEditRole(u.role);
+        setEditWarns(u.warns_count);
+        setEditBalance(u.balance);
+    };
+
+    // Admin save character stats updates
+    const handleAdminSaveUser = async (e) => {
+        e.preventDefault();
+        if (!selectedAdminUser) return;
+        setError('');
+        setSuccess('');
+        setLoading(true);
+        
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-userid': user.id
+                },
+                body: JSON.stringify({
+                    action: 'saveAdminUserSettings',
+                    targetUserId: selectedAdminUser.id,
+                    role: editRole,
+                    warns: parseInt(editWarns),
+                    balance: parseFloat(editBalance)
+                })
+            });
+            
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Save user settings failed");
+            
+            setSuccess(`Параметры персонажа ${selectedAdminUser.character_name} успешно обновлены!`);
+            
+            // Sync lists
+            loadAdminData();
+            // Sync own profile if we edited ourselves
+            if (selectedAdminUser.id === user.id) {
+                refreshUserData(user.id);
+            }
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Admin live overwrite Volodya System Prompt
+    const handleAdminSavePrompt = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+        setLoading(true);
+        
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-userid': user.id
+                },
+                body: JSON.stringify({
+                    action: 'saveSystemPrompt',
+                    prompt: systemPrompt
+                })
+            });
+            
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to update prompt");
+            
+            setSuccess("Системный промпт Володеньки успешно перезаписан во всем его сознании!");
+            localStorage.setItem('moriarty_system_prompt', systemPrompt);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Connections Settings changes
+    const handleConfigSave = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+        setLoading(true);
+        
+        try {
+            const res = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    supabaseUrl: config.supabaseUrl,
+                    supabaseAnonKey: config.supabaseAnonKey.includes('...') ? undefined : config.supabaseAnonKey,
+                    geminiApiKey: config.geminiApiKey.includes('...') ? undefined : config.geminiApiKey,
+                    discordClientId: config.discordClientId,
+                    discordClientSecret: config.discordClientSecret || undefined
+                })
+            });
+            
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Save configuration failed");
+            
+            setSuccess("Настройки подключения успешно записаны и применены на сервере!");
+            fetchConfig();
+            if (user) refreshUserData(user.id);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Reset settings to fallback demo mode
+    const handleConfigReset = async () => {
+        if (!confirm("Вы уверены, что хотите сбросить все ключи и переключить кабинет обратно в Демо-режим?")) return;
+        setError('');
+        setSuccess('');
+        setLoading(true);
+        
+        try {
+            const res = await fetch('/api/config', { method: 'DELETE' });
+            if (!res.ok) throw new Error("Сброс не удался");
+            
+            setSuccess("Кабинет успешно отключен от Supabase/Gemini. Возврат в Demo-Mode.");
+            fetchConfig();
+            if (user) refreshUserData(user.id);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const getProceduralAvatar = (name) => {
+        return `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(name || 'Moriarty')}&backgroundColor=6e3bfa`;
+    };
+
+    const formatCurrency = (val) => {
+        return `$${parseFloat(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
+    const formatDate = (isoString) => {
+        if (!isoString) return 'Неизвестно';
+        return new Date(isoString).toLocaleDateString('ru-RU', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    // Auth screen render
+    if (!user) {
+        return (
+            <div className="auth-overlay">
+                <div className="auth-card glass-panel glow-purple animate-fade-in">
+                    <div className="auth-header">
+                        <img 
+                            src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80" 
+                            alt="Moriarty Crest" 
+                            className="auth-logo"
+                        />
+                        <h2 className="brand-text">Moriarty</h2>
+                        <p className="auth-subtitle">СЕМЕЙНЫЙ КАБИНЕТ | MURRIETA</p>
+                    </div>
+
+                    {error && (
+                        <div className="alert alert-danger">
+                            <i className="fa-solid fa-triangle-exclamation"></i>
+                            <span>{error}</span>
+                        </div>
+                    )}
+                    
+                    {success && (
+                        <div className="alert alert-success">
+                            <i className="fa-solid fa-circle-check"></i>
+                            <span>{success}</span>
+                        </div>
+                    )}
+
+                    <div className="auth-tabs">
+                        <button 
+                            className={`auth-tab-btn ${authMode === 'login' ? 'active' : ''}`}
+                            onClick={() => { setAuthMode('login'); setError(''); }}
+                        >
+                            Вход
+                        </button>
+                        <button 
+                            className={`auth-tab-btn ${authMode === 'register' ? 'active' : ''}`}
+                            onClick={() => { setAuthMode('register'); setError(''); }}
+                        >
+                            Регистрация
+                        </button>
+                    </div>
+
+                    <form onSubmit={handleAuth} className="auth-form">
+                        <div className="form-group">
+                            <label>Email адреc</label>
+                            <input 
+                                type="email" 
+                                className="input-glow" 
+                                placeholder="name@moriarty.fam"
+                                value={email} 
+                                onChange={(e) => setEmail(e.target.value)} 
+                                required
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label>Пароль</label>
+                            <input 
+                                type="password" 
+                                className="input-glow" 
+                                placeholder="••••••••"
+                                value={password} 
+                                onChange={(e) => setPassword(e.target.value)} 
+                                required
+                            />
+                        </div>
+
+                        {authMode === 'register' && (
+                            <>
+                                <div className="form-group animate-slide-down">
+                                    <label>Игровое Имя_Фамилия</label>
+                                    <input 
+                                        type="text" 
+                                        className="input-glow" 
+                                        placeholder="Arthur_Moriarty"
+                                        value={charName} 
+                                        onChange={(e) => setCharName(e.target.value)} 
+                                        required
+                                    />
+                                    <small className="help-text">Должно соответствовать РП нику с нижним подчеркиванием</small>
+                                </div>
+
+                                <div className="form-group animate-slide-down">
+                                    <label>CID Персонажа (Static ID)</label>
+                                    <input 
+                                        type="text" 
+                                        className="input-glow" 
+                                        placeholder="8542"
+                                        value={staticId} 
+                                        onChange={(e) => setStaticId(e.target.value)} 
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group animate-slide-down">
+                                    <label>Реферальный код (Если есть)</label>
+                                    <input 
+                                        type="text" 
+                                        className="input-glow" 
+                                        placeholder="MORI-777"
+                                        value={referral} 
+                                        onChange={(e) => setReferral(e.target.value)} 
+                                    />
+                                </div>
+                            </>
+                        )}
+
+                        <button type="submit" className="btn-primary auth-submit-btn" disabled={loading}>
+                            {loading ? (
+                                <i className="fa-solid fa-spinner fa-spin"></i>
+                            ) : (
+                                <>
+                                    <i className="fa-solid fa-right-to-bracket"></i>
+                                    <span>{authMode === 'login' ? 'Войти в кабинет' : 'Стать членом семьи'}</span>
+                                </>
+                            )}
+                        </button>
+                    </form>
+
+                    <div className="divider"><span>ИЛИ</span></div>
+
+                    <button 
+                        type="button" 
+                        onClick={handleDiscordSimulatedLogin} 
+                        className="btn-discord" 
+                        disabled={loading}
+                    >
+                        <i className="fa-brands fa-discord"></i>
+                        <span>Вход через Discord (Тест-Симуляция)</span>
+                    </button>
+
+                    <div className="demo-accounts-hint">
+                        <h4>Быстрый демо-вход (Логин / Пароль):</h4>
+                        <ul>
+                            <li><strong>OWNER:</strong> <code>owner@moriarty.fam</code> / <code>owner</code></li>
+                            <li><strong>DEV:</strong> <code>developer@moriarty.fam</code> / <code>developer</code></li>
+                            <li><strong>MOD:</strong> <code>moderator@moriarty.fam</code> / <code>moderator</code></li>
+                            <li><strong>MEM:</strong> <code>member@moriarty.fam</code> / <code>member</code></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Active logged-in layout
+    const activeProfile = profile || user;
+    const isOwnerOrDev = ['OWNER', 'Developer'].includes(activeProfile?.role);
+    
+    // Warn indicators calculations
+    const displayWarns = activeProfile?.warns_count || 0;
+    const warnPerc = Math.min(100, (displayWarns / 3) * 100);
+    const hasCriticalWarns = displayWarns >= 3;
+
+    return (
+        <div className="app-container">
+            
+            {/* Sidebar Shell */}
+            <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+                <div>
+                    <div className="sidebar-header">
+                        <img 
+                            src={getProceduralAvatar(activeProfile.character_name)} 
+                            alt="Crest" 
+                            className="sidebar-logo"
+                        />
+                        <div>
+                            <h3 className="brand-text sidebar-title">Moriarty</h3>
+                            <span className="sidebar-subtitle">Кабинет</span>
+                        </div>
+                    </div>
+
+                    <ul className="nav-menu">
+                        <li className="nav-item">
+                            <a 
+                                className={`nav-link ${activeTab === 'stats' ? 'active' : ''}`}
+                                onClick={() => { setActiveTab('stats'); setMobileMenuOpen(false); }}
+                            >
+                                <i className="fa-solid fa-chart-simple"></i>
+                                <span>Характеристики</span>
+                            </a>
+                        </li>
+                        <li className="nav-item">
+                            <a 
+                                className={`nav-link ${activeTab === 'balance' ? 'active' : ''}`}
+                                onClick={() => { setActiveTab('balance'); setMobileMenuOpen(false); }}
+                            >
+                                <i className="fa-solid fa-wallet"></i>
+                                <span>Казна и переводы</span>
+                            </a>
+                        </li>
+                        <li className="nav-item">
+                            <a 
+                                className={`nav-link ${activeTab === 'warns' ? 'active' : ''}`}
+                                onClick={() => { setActiveTab('warns'); setMobileMenuOpen(false); }}
+                            >
+                                <i className="fa-solid fa-triangle-exclamation"></i>
+                                <span>Выговоры ({displayWarns}/3)</span>
+                            </a>
+                        </li>
+                        <li className="nav-item">
+                            <a 
+                                className={`nav-link ${activeTab === 'feedback' ? 'active' : ''}`}
+                                onClick={() => { setActiveTab('feedback'); setMobileMenuOpen(false); }}
+                            >
+                                <i className="fa-solid fa-comments"></i>
+                                <span>Обратная связь</span>
+                            </a>
+                        </li>
+                        <li className="nav-item">
+                            <a 
+                                className={`nav-link ${activeTab === 'referrals' ? 'active' : ''}`}
+                                onClick={() => { setActiveTab('referrals'); setMobileMenuOpen(false); }}
+                            >
+                                <i className="fa-solid fa-users-viewfinder"></i>
+                                <span>Рефералы</span>
+                            </a>
+                        </li>
+                        <li className="nav-item">
+                            <a 
+                                className={`nav-link ${activeTab === 'volodya' ? 'active' : ''}`}
+                                onClick={() => { setActiveTab('volodya'); setMobileMenuOpen(false); }}
+                                style={{ borderRight: '2px solid var(--accent-cyan)' }}
+                            >
+                                <i className="fa-solid fa-comment-dots" style={{ color: 'var(--accent-cyan)' }}></i>
+                                <span>Личный раб Володя</span>
+                                <span className="status-indicator"></span>
+                            </a>
+                        </li>
+                        
+                        {isOwnerOrDev && (
+                            <li className="nav-item">
+                                <a 
+                                    className={`nav-link admin-only ${activeTab === 'admin' ? 'active' : ''}`}
+                                    onClick={() => { setActiveTab('admin'); setMobileMenuOpen(false); }}
+                                >
+                                    <i className="fa-solid fa-shield-halved" style={{ color: 'var(--accent-pink)' }}></i>
+                                    <span>Панель OWNER/DEV</span>
+                                </a>
+                            </li>
+                        )}
+                        
+                        <li className="nav-item">
+                            <a 
+                                className={`nav-link ${activeTab === 'settings' ? 'active' : ''}`}
+                                onClick={() => { setActiveTab('settings'); setMobileMenuOpen(false); }}
+                            >
+                                <i className="fa-solid fa-circle-nodes"></i>
+                                <span>Подключения API</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <div className="sidebar-footer">
+                    <div className="user-snippet">
+                        <div className="user-snippet-avatar">
+                            {activeProfile.discord ? (
+                                <img src={activeProfile.discord.avatar} alt="DS" />
+                            ) : (
+                                activeProfile.character_name.charAt(0)
+                            )}
+                        </div>
+                        <div className="user-snippet-info">
+                            <h4 className="user-snippet-name">{activeProfile.character_name}</h4>
+                            <span className="user-snippet-role">{activeProfile.role}</span>
+                        </div>
+                        <button onClick={handleLogout} className="btn-logout" title="Выйти">
+                            <i className="fa-solid fa-power-off"></i>
+                        </button>
+                    </div>
+                </div>
+            </aside>
+
+            {/* Main Panel */}
+            <main className="main-content">
+                <header className="main-header">
+                    <div className="header-title-wrap">
+                        <h1>
+                            Приветствуем,{' '}
+                            <span className="brand-text">
+                                {activeProfile.character_name.split('_')[0]}
+                            </span>!
+                        </h1>
+                        <p>Управление синдикатом Moriarty — GTA5RP Murrieta</p>
+                    </div>
+
+                    <div className="header-actions">
+                        <span className="server-badge">Murrieta</span>
+                        <div className={`connection-status ${isSupabaseMode ? '' : 'demo'}`}>
+                            <span className="status-dot"></span>
+                            <span>{isSupabaseMode ? 'Supabase Облако' : 'Demo Локальная'}</span>
+                        </div>
+                        <button 
+                            className="mobile-nav-toggle"
+                            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                        >
+                            <i className={`fa-solid ${mobileMenuOpen ? 'fa-xmark' : 'fa-bars'}`}></i>
+                        </button>
+                    </div>
+                </header>
+
+                {/* Status Messages */}
+                {error && (
+                    <div className="alert alert-danger animate-fade-in" style={{ marginBottom: '2rem' }}>
+                        <i className="fa-solid fa-triangle-exclamation"></i>
+                        <span>{error}</span>
+                        <button className="alert-close" onClick={() => setError('')}><i className="fa-solid fa-xmark"></i></button>
+                    </div>
+                )}
+                {success && (
+                    <div className="alert alert-success animate-fade-in" style={{ marginBottom: '2rem' }}>
+                        <i className="fa-solid fa-circle-check"></i>
+                        <span>{success}</span>
+                        <button className="alert-close" onClick={() => setSuccess('')}><i className="fa-solid fa-xmark"></i></button>
+                    </div>
+                )}
+
+                {/* DYNAMIC TABS PANEL */}
+
+                {/* 1. CHARACTER STATS TAB */}
+                <div className={`tab-panel ${activeTab === 'stats' ? 'active' : ''}`}>
+                    <div className="stats-banner glass-panel glow-purple animate-fade-in">
+                        <div className="avatar-large">
+                            <img src={getProceduralAvatar(activeProfile.character_name)} alt="Av" />
+                        </div>
+                        <div className="banner-profile-info">
+                            <h2 className="char-title">{activeProfile.character_name}</h2>
+                            <span className="char-static">Static CID: {activeProfile.static_id}</span>
+                        </div>
+                        <div className="banner-stats">
+                            <div className="banner-stat-item">
+                                <div className="banner-stat-value brand-text" style={{ fontSize: '1.9rem' }}>
+                                    {formatCurrency(activeProfile.balance)}
+                                </div>
+                                <span className="banner-stat-label">Личный счет</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid-stats">
+                        <div className="stat-card glass-panel">
+                            <div className="stat-icon"><i className="fa-solid fa-shield"></i></div>
+                            <div className="stat-details">
+                                <span className="stat-val">{activeProfile.role}</span>
+                                <span className="stat-lbl">Должность в семье</span>
+                            </div>
+                        </div>
+                        <div className="stat-card glass-panel">
+                            <div className="stat-icon"><i className="fa-solid fa-triangle-exclamation"></i></div>
+                            <div className="stat-details">
+                                <span className="stat-val">{displayWarns} / 3</span>
+                                <span className="stat-lbl">Активные выговоры</span>
+                            </div>
+                        </div>
+                        <div className="stat-card glass-panel">
+                            <div className="stat-icon"><i className="fa-solid fa-users"></i></div>
+                            <div className="stat-details">
+                                <span className="stat-val">{referrals.length} чел.</span>
+                                <span className="stat-lbl">Приглашенные игроки</span>
+                            </div>
+                        </div>
+                        <div className="stat-card glass-panel">
+                            <div className="stat-icon"><i className="fa-solid fa-fingerprint"></i></div>
+                            <div className="stat-details">
+                                <span className="stat-val">MORI-{activeProfile.static_id}</span>
+                                <span className="stat-lbl">Ваш реф. промокод</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 2. FINANCE BALANCE TAB */}
+                <div className={`tab-panel ${activeTab === 'balance' ? 'active' : ''}`}>
+                    <div className="balance-widget">
+                        
+                        <div className="balance-card-glowing glass-panel glow-purple animate-fade-in">
+                            <span className="sidebar-subtitle" style={{ letterSpacing: '3px' }}>Личная ячейка</span>
+                            <div className="balance-huge">{formatCurrency(activeProfile.balance)}</div>
+                            <div className="balance-actions">
+                                <button className="btn-primary" onClick={() => setShowDepositModal(true)}>
+                                    <i className="fa-solid fa-plus"></i>
+                                    <span>Вложить в казну</span>
+                                </button>
+                                <button className="btn-secondary" onClick={() => setShowTransferModal(true)}>
+                                    <i className="fa-solid fa-arrow-right-arrow-left"></i>
+                                    <span>Перевести по CID</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="glass-panel">
+                            <h3 style={{ marginBottom: '1.4rem' }}>История казны</h3>
+                            <div className="ledger-wrapper">
+                                {transactions.length === 0 ? (
+                                    <div className="empty-state">
+                                        <i className="fa-solid fa-receipt"></i>
+                                        <p>Транзакции отсутствуют</p>
+                                    </div>
+                                ) : (
+                                    transactions.map((tx) => (
+                                        <div key={tx.id} className="ledger-item">
+                                            <div className="ledger-left">
+                                                <div className={`ledger-badge ${tx.type === 'DEPOSIT' ? 'deposit' : tx.type === 'WITHDRAW' ? 'withdraw' : 'transfer'}`}>
+                                                    <i className={`fa-solid ${tx.type === 'DEPOSIT' ? 'fa-arrow-down' : tx.type === 'WITHDRAW' ? 'fa-arrow-up' : 'fa-arrow-right-arrow-left'}`}></i>
+                                                </div>
+                                                <div className="ledger-info">
+                                                    <span className="ledger-desc">{tx.description}</span>
+                                                    <span className="ledger-date">{formatDate(tx.created_at)}</span>
+                                                </div>
+                                            </div>
+                                            <span className={`ledger-amount ${tx.amount > 0 ? 'plus' : 'minus'}`}>
+                                                {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}
+                                            </span>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                {/* 3. WARNS TAB */}
+                <div className={`tab-panel ${activeTab === 'warns' ? 'active' : ''}`}>
+                    <div className="warns-dashboard">
+                        
+                        <div className="glass-panel warn-visual-box glow-purple">
+                            <div className="warn-counter-dial" style={{ borderColor: hasCriticalWarns ? 'var(--danger)' : 'var(--primary)' }}>
+                                <div className="warn-counter-inner" style={{ color: hasCriticalWarns ? 'var(--danger)' : 'var(--text-primary)' }}>
+                                    {displayWarns}
+                                </div>
+                            </div>
+                            <h3>{hasCriticalWarns ? 'ВЫГОВОРЫ ПРЕВЫШЕНЫ' : 'Уровень нарушений'}</h3>
+                            <p style={{ marginTop: '8px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                                {hasCriticalWarns 
+                                    ? 'Превышен лимит выговоров (3/3). Ожидайте исключения или свяжитесь с OWNER!' 
+                                    : 'При достижении 3/3 активных выговоров наступает автоматическое изгнание с позором.'}
+                            </p>
+                        </div>
+
+                        <div className="glass-panel">
+                            <h3 style={{ marginBottom: '1.4rem' }}>Протоколы взысканий</h3>
+                            <div className="warns-list">
+                                {warns.length === 0 ? (
+                                    <div className="empty-state">
+                                        <i className="fa-solid fa-clipboard-check"></i>
+                                        <p>У вас нет активных или истекших выговоров! Семья гордится вами.</p>
+                                    </div>
+                                ) : (
+                                    warns.map((w) => (
+                                        <div key={w.id} className={`warn-item ${w.status === 'EXPIRED' ? 'expired' : ''}`}>
+                                            <div className="warn-item-left">
+                                                <i className="fa-solid fa-triangle-exclamation warn-item-icon"></i>
+                                                <div className="warn-item-details">
+                                                    <span className="warn-reason">{w.reason}</span>
+                                                    <span className="warn-meta">Выдал: {w.issued_by} | {formatDate(w.issued_at)}</span>
+                                                </div>
+                                            </div>
+                                            <span className={`warn-badge-status ${w.status === 'ACTIVE' ? 'active' : 'expired'}`}>
+                                                {w.status === 'ACTIVE' ? 'Активен' : 'Снят/Истек'}
+                                            </span>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                {/* 4. FEEDBACK SUGGESTIONS & COMPLAINTS TAB */}
+                <div className={`tab-panel ${activeTab === 'feedback' ? 'active' : ''}`}>
+                    <div className="feedback-container">
+                        
+                        <div className="glass-panel feedback-form-box">
+                            <h3 style={{ marginBottom: '1.2rem' }}>Создать обращение</h3>
+                            
+                            <div className="feedback-type-selector">
+                                <button 
+                                    className={`type-tab ${feedbackType === 'SUGGESTION' ? 'active' : ''}`}
+                                    onClick={() => setFeedbackType('SUGGESTION')}
+                                >
+                                    <i className="fa-solid fa-lightbulb" style={{ marginRight: '8px' }}></i>
+                                    Предложение
+                                </button>
+                                <button 
+                                    className={`type-tab complaint ${feedbackType === 'COMPLAINT' ? 'active' : ''}`}
+                                    onClick={() => setFeedbackType('COMPLAINT')}
+                                >
+                                    <i className="fa-solid fa-face-angry" style={{ marginRight: '8px' }}></i>
+                                    Жалоба
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleFeedbackSubmit}>
+                                {feedbackType === 'COMPLAINT' && (
+                                    <div className="form-group animate-slide-down">
+                                        <label>Имя нарушителя (Имя_Фамилия или CID)</label>
+                                        <input 
+                                            type="text" 
+                                            className="input-glow" 
+                                            placeholder="Narek_Toretto"
+                                            value={feedbackTarget} 
+                                            onChange={(e) => setFeedbackTarget(e.target.value)} 
+                                            required
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="form-group">
+                                    <label>Суть предложения или детали нарушения</label>
+                                    <textarea 
+                                        className="input-glow textarea-prompt" 
+                                        placeholder={feedbackType === 'SUGGESTION' 
+                                            ? "Опишите подробно вашу идею, как сделать семью Moriarty сильнее..." 
+                                            : "Опишите конфликт или нарушение правил сервера/семьи со стороны участника..."}
+                                        value={feedbackText}
+                                        onChange={(e) => setFeedbackText(e.target.value)}
+                                        required
+                                    ></textarea>
+                                </div>
+
+                                <button type="submit" className="btn-primary" style={{ width: '100%' }} disabled={loading}>
+                                    {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Отправить обращение'}
+                                </button>
+                            </form>
+                        </div>
+
+                        <div className="glass-panel">
+                            <h3 style={{ marginBottom: '1.4rem' }}>История обращений</h3>
+                            <div className="feedback-history-list">
+                                {feedbackList.length === 0 ? (
+                                    <div className="empty-state">
+                                        <i className="fa-solid fa-message"></i>
+                                        <p>Вы еще не подавали жалоб или предложений</p>
+                                    </div>
+                                ) : (
+                                    feedbackList.map((f) => (
+                                        <div key={f.id} className="feedback-card">
+                                            <div className="feedback-card-header">
+                                                <span className={`feedback-badge-type ${f.type.toLowerCase()}`}>
+                                                    {f.type === 'SUGGESTION' ? 'Предложение' : 'Жалоба'}
+                                                </span>
+                                                <span className={`feedback-status ${f.status.toLowerCase()}`}>
+                                                    <i className="fa-solid fa-circle" style={{ fontSize: '0.5rem' }}></i>
+                                                    {f.status === 'PENDING' ? 'На рассмотрении' : f.status === 'APPROVED' ? 'Одобрено' : 'Отклонено'}
+                                                </span>
+                                            </div>
+                                            
+                                            {f.target_member && (
+                                                <span className="feedback-target">Нарушитель: {f.target_member}</span>
+                                            )}
+
+                                            <p className="feedback-card-text">{f.text}</p>
+                                            
+                                            {f.admin_comment && (
+                                                <div className="feedback-comment">
+                                                    <strong>Вердикт старших:</strong> {f.admin_comment}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                {/* 5. REFERRALS SYSTEM TAB */}
+                <div className={`tab-panel ${activeTab === 'referrals' ? 'active' : ''}`}>
+                    <div className="referral-widget">
+                        
+                        <div className="glass-panel ref-code-box glow-purple">
+                            <span className="sidebar-subtitle">Ваша персональная реф-сеть</span>
+                            
+                            <div 
+                                className="ref-code-display" 
+                                onClick={() => {
+                                    navigator.clipboard.writeText(`MORI-${activeProfile.static_id}`);
+                                    alert("Код успешно скопирован в буфер обмена!");
+                                }}
+                            >
+                                MORI-{activeProfile.static_id}
+                            </div>
+                            
+                            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.6' }}>
+                                Дайте этот реферальный промокод новичкам при их первой регистрации в кабинете Moriarty. 
+                                Каждый новый игрок получит стартовый бонус <strong>+$10,000</strong> в казну, 
+                                а ваш баланс мгновенно пополнится на <strong>+$10,000</strong> в знак благодарности!
+                            </p>
+                        </div>
+
+                        <div className="glass-panel">
+                            <h3 style={{ marginBottom: '1.4rem' }}>Приглашенные бойцы ({referrals.length})</h3>
+                            <div className="ref-players-list">
+                                {referrals.length === 0 ? (
+                                    <div className="empty-state">
+                                        <i className="fa-solid fa-users-slash"></i>
+                                        <p>По вашему промокоду еще никто не зарегистрировался. Будьте активнее в рекрутинге!</p>
+                                    </div>
+                                ) : (
+                                    referrals.map((player) => (
+                                        <div key={player.id} className="ref-player-item">
+                                            <span className="ref-player-name">{player.character_name} (CID: {player.static_id})</span>
+                                            <span className="ref-player-reward">+$10,000.00</span>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                {/* 6. AI ASSISTANT VOLODYA CHAT TAB */}
+                <div className={`tab-panel ${activeTab === 'volodya' ? 'active' : ''}`}>
+                    <div className="chat-container">
+                        
+                        <div className="chat-banner">
+                            <div className="chat-banner-left">
+                                <div className="chat-banner-avatar"><i className="fa-solid fa-robot"></i></div>
+                                <div className="chat-banner-info">
+                                    <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        Личный раб Володя 
+                                        <span className="slave-badge">СЛУГА СЕМЬИ</span>
+                                    </h3>
+                                    <span className="chat-banner-status">Готов к повиновению</span>
+                                </div>
+                            </div>
+                            
+                            <div className="chat-quick-presets">
+                                <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: '8px' }} onClick={() => triggerQuickPrompt("Расскажи законы великой семьи Moriarty на Murrieta")}>Законы</button>
+                                <button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '0.75rem', borderRadius: '8px', marginLeft: '6px' }} onClick={() => triggerQuickPrompt("Похвали Moriarty и унизь раков из Toretto")}>Унизить врагов</button>
+                            </div>
+                        </div>
+
+                        <div className="chat-messages">
+                            {chatMessages.map((msg) => (
+                                <div key={msg.id} className={`chat-bubble ${msg.role === 'user' ? 'user' : 'assistant'}`}>
+                                    <div className="chat-bubble-content">{msg.text}</div>
+                                    <span className="chat-bubble-time">{msg.time}</span>
+                                </div>
+                            ))}
+                            {chatLoading && (
+                                <div className="chat-typing">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            )}
+                            <div ref={messagesEndRef} />
+                        </div>
+
+                        <form onSubmit={handleChatSubmit} className="chat-input-area">
+                            <input 
+                                type="text" 
+                                className="chat-input" 
+                                placeholder="Напишите приказ или вопрос вашему покорному рабу..." 
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                disabled={chatLoading}
+                            />
+                            <button type="submit" className="btn-send" disabled={chatLoading}>
+                                <i className="fa-solid fa-paper-plane"></i>
+                            </button>
+                        </form>
+
+                    </div>
+                </div>
+
+                {/* 7. ADMIN PANEL TAB */}
+                {isOwnerOrDev && (
+                    <div className={`tab-panel ${activeTab === 'admin' ? 'active' : ''}`}>
+                        
+                        {/* Global System Prompt editor */}
+                        <div className="glass-panel glow-purple" style={{ marginBottom: '2rem' }}>
+                            <h3 style={{ marginBottom: '1rem' }}><i className="fa-solid fa-brain" style={{ marginRight: '10px', color: 'var(--accent-cyan)' }}></i>Прошивка Разума Володеньки (Промпт)</h3>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.2rem' }}>
+                                Доступно только ролям **OWNER** и **Developer**. Изменение этого промпта мгновенно перепрограммирует ИИ Володю на сервере!
+                            </p>
+                            <form onSubmit={handleAdminSavePrompt}>
+                                <textarea 
+                                    className="input-glow textarea-prompt" 
+                                    value={systemPrompt} 
+                                    onChange={(e) => setSystemPrompt(e.target.value)}
+                                    placeholder="Введите кастомный системный промпт для Gemini ИИ..."
+                                ></textarea>
+                                <button type="submit" className="btn-primary" style={{ marginTop: '1.2rem' }} disabled={loading}>
+                                    {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Записать в чип Володе'}
+                                </button>
+                            </form>
+                        </div>
+
+                        {/* Database Character controls */}
+                        <div className="admin-grid">
+                            
+                            <div className="glass-panel admin-list-wrap">
+                                <h3>База Людей</h3>
+                                <div className="search-bar-wrap">
+                                    <i className="fa-solid fa-magnifying-glass"></i>
+                                    <input 
+                                        type="text" 
+                                        className="input-glow search-input" 
+                                        placeholder="Поиск по имени / CID..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                    />
+                                </div>
+                                
+                                <div className="admin-users-list">
+                                    {adminUsers
+                                        .filter(u => u.character_name.toLowerCase().includes(searchQuery.toLowerCase()) || u.static_id.includes(searchQuery))
+                                        .map(u => (
+                                            <div 
+                                                key={u.id} 
+                                                className={`admin-user-card ${selectedAdminUser?.id === u.id ? 'active' : ''}`}
+                                                onClick={() => selectAdminUser(u)}
+                                            >
+                                                <div className="admin-user-left">
+                                                    <div className="admin-user-avatar">
+                                                        {u.character_name.charAt(0)}
+                                                    </div>
+                                                    <div className="admin-user-info">
+                                                        <span className="admin-user-name">{u.character_name}</span>
+                                                        <span className="admin-user-static">CID: {u.static_id}</span>
+                                                    </div>
+                                                </div>
+                                                <span className={`admin-user-role-badge ${u.role.toLowerCase()}`}>
+                                                    {u.role}
+                                                </span>
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            </div>
+
+                            <div className="glass-panel">
+                                {selectedAdminUser ? (
+                                    <form onSubmit={handleAdminSaveUser} className="admin-details-form animate-fade-in">
+                                        <div className="admin-details-header">
+                                            <div className="details-avatar-huge">
+                                                {selectedAdminUser.character_name.charAt(0)}
+                                            </div>
+                                            <div className="details-info-wrap">
+                                                <span className="details-name">{selectedAdminUser.character_name}</span>
+                                                <span className="details-static">CID персонажа: {selectedAdminUser.static_id}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label>Уровень прав (Семейная Роль)</label>
+                                            <select 
+                                                className="input-glow" 
+                                                value={editRole}
+                                                onChange={(e) => setEditRole(e.target.value)}
+                                                style={{ cursor: 'pointer' }}
+                                            >
+                                                <option value="MEMBER">MEMBER (Рядовой)</option>
+                                                <option value="MODERATOR">MODERATOR (Старший состав)</option>
+                                                <option value="Developer">Developer (Тех-админ)</option>
+                                                <option value="OWNER">OWNER (Глава семьи)</option>
+                                            </select>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label>Количество выговоров ({editWarns} / 3)</label>
+                                            <input 
+                                                type="number" 
+                                                className="input-glow"
+                                                min="0" 
+                                                max="3"
+                                                value={editWarns} 
+                                                onChange={(e) => setEditWarns(e.target.value)}
+                                            />
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label>Личный сейф ($)</label>
+                                            <input 
+                                                type="number" 
+                                                className="input-glow" 
+                                                value={editBalance} 
+                                                onChange={(e) => setEditBalance(e.target.value)}
+                                            />
+                                        </div>
+
+                                        <button type="submit" className="btn-primary" disabled={loading}>
+                                            {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Сохранить изменения'}
+                                        </button>
+                                    </form>
+                                ) : (
+                                    <div className="empty-state" style={{ height: '300px' }}>
+                                        <i className="fa-solid fa-user-gear"></i>
+                                        <p>Выберите персонажа из списка для администрирования</p>
+                                    </div>
+                                )}
+                            </div>
+
+                        </div>
+                    </div>
+                )}
+
+                {/* 8. API CONNECTIONS AND SETTINGS TAB */}
+                <div className={`tab-panel ${activeTab === 'settings' ? 'active' : ''}`}>
+                    <div className="glass-panel glow-purple animate-fade-in" style={{ maxWidth: '650px', margin: '0 auto' }}>
+                        <h3 style={{ marginBottom: '1rem' }}><i className="fa-solid fa-network-wired" style={{ marginRight: '10px', color: 'var(--primary)' }}></i>Связующий Центр Кабинета</h3>
+                        <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1.8rem', lineHeight: '1.6' }}>
+                            Кабинет спроектирован по гибридному стандарту. По умолчанию он работает на <strong>Demo-Mode</strong> (локальный файл <code>demo_db.json</code>). 
+                            Укажите параметры Supabase и ключ Gemini ниже, чтобы мгновенно развернуть полноценную облачную базу данных со встроенным искусственным интеллектом!
+                        </p>
+
+                        <form onSubmit={handleConfigSave}>
+                            <div className="form-group">
+                                <label>Supabase Project URL</label>
+                                <input 
+                                    type="text" 
+                                    className="input-glow" 
+                                    placeholder="https://xxxxxxxxx.supabase.co"
+                                    value={config.supabaseUrl}
+                                    onChange={(e) => setConfig({ ...config, supabaseUrl: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Supabase Anon Key</label>
+                                <input 
+                                    type="password" 
+                                    className="input-glow" 
+                                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                                    value={config.supabaseAnonKey}
+                                    onChange={(e) => setConfig({ ...config, supabaseAnonKey: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Google Gemini API Key</label>
+                                <input 
+                                    type="password" 
+                                    className="input-glow" 
+                                    placeholder="AIzaSy..."
+                                    value={config.geminiApiKey}
+                                    onChange={(e) => setConfig({ ...config, geminiApiKey: e.target.value })}
+                                />
+                                <small className="help-text">Используется для живого разума личного раба Володи</small>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Discord OAuth2 Client ID</label>
+                                <input 
+                                    type="text" 
+                                    className="input-glow" 
+                                    placeholder="123456789012345678"
+                                    value={config.discordClientId}
+                                    onChange={(e) => setConfig({ ...config, discordClientId: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="form-group" style={{ marginBottom: '2.2rem' }}>
+                                <label>Discord Client Secret</label>
+                                <input 
+                                    type="password" 
+                                    className="input-glow" 
+                                    placeholder="скрыто во благо безопасности"
+                                    value={config.discordClientSecret}
+                                    onChange={(e) => setConfig({ ...config, discordClientSecret: e.target.value })}
+                                />
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '14px' }}>
+                                <button type="submit" className="btn-primary" style={{ flex: '2' }} disabled={loading}>
+                                    {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Подключить и обновить'}
+                                </button>
+                                <button type="button" className="btn-secondary" style={{ flex: '1', color: 'var(--danger)' }} onClick={handleConfigReset} disabled={loading}>
+                                    Сбросить
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+            </main>
+
+            {/* DYNAMIC MODALS FOR BALANCE ACTIONS */}
+            
+            {/* Deposit Modal */}
+            <div className={`modal-overlay ${showDepositModal ? 'active' : ''}`}>
+                <div className="modal-content">
+                    <div className="modal-header">
+                        <h3 className="modal-title">Вложение в казну</h3>
+                        <button className="modal-close" onClick={() => setShowDepositModal(false)}>
+                            <i className="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <form onSubmit={handleDepositSubmit}>
+                        <div className="form-group">
+                            <label>Сумма вклада ($)</label>
+                            <input 
+                                type="number" 
+                                className="input-glow" 
+                                placeholder="50000"
+                                value={depositAmount}
+                                onChange={(e) => setDepositAmount(e.target.value)}
+                                required
+                                min="1"
+                            />
+                            <small className="help-text">Деньги спишутся с вашего счета и поступят в семейную казну</small>
+                        </div>
+                        <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '1rem' }} disabled={loading}>
+                            {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Вложить'}
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {/* Transfer Modal */}
+            <div className={`modal-overlay ${showTransferModal ? 'active' : ''}`}>
+                <div className="modal-content">
+                    <div className="modal-header">
+                        <h3 className="modal-title">Семейный перевод</h3>
+                        <button className="modal-close" onClick={() => setShowTransferModal(false)}>
+                            <i className="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                    <form onSubmit={handleTransferSubmit}>
+                        <div className="form-group">
+                            <label>CID Получателя (Static ID)</label>
+                            <input 
+                                type="text" 
+                                className="input-glow" 
+                                placeholder="CID игрока, например 777"
+                                value={transferTargetCid}
+                                onChange={(e) => setTransferTargetCid(e.target.value)}
+                                required
+                            />
+                        </div>
+                        <div className="form-group">
+                            <label>Сумма перевода ($)</label>
+                            <input 
+                                type="number" 
+                                className="input-glow" 
+                                placeholder="10000"
+                                value={transferAmount}
+                                onChange={(e) => setTransferAmount(e.target.value)}
+                                required
+                                min="1"
+                            />
+                        </div>
+                        <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '1rem' }} disabled={loading}>
+                            {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Перевести'}
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    );
+}
