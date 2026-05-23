@@ -29,8 +29,9 @@ export async function GET(request) {
     try {
         if (action === 'getProfile') {
             if (supabase) {
-                const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+                const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
                 if (error) return NextResponse.json({ error: error.message }, { status: 404 });
+                if (!data) return NextResponse.json({ error: "Профиль не найден" }, { status: 404 });
                 return NextResponse.json(data);
             } else {
                 const db = getDemoDb();
@@ -91,7 +92,7 @@ export async function GET(request) {
         else if (action === 'getAdminUsers') {
             // Check Admin role
             if (supabase) {
-                const { data: adminUser, error: aError } = await supabase.from('profiles').select('role').eq('id', adminUserId).single();
+                const { data: adminUser, error: aError } = await supabase.from('profiles').select('role').eq('id', adminUserId).maybeSingle();
                 if (aError || !adminUser || !['OWNER', 'Developer'].includes(adminUser.role)) {
                     return NextResponse.json({ error: "В доступе отказано! Нужен OWNER или Developer." }, { status: 403 });
                 }
@@ -127,8 +128,8 @@ export async function POST(request) {
             if (amount <= 0) return NextResponse.json({ error: "Сумма вклада должна быть больше нуля!" }, { status: 400 });
             
             if (supabase) {
-                const { data: user, error: uErr } = await supabase.from('profiles').select('balance').eq('id', userId).single();
-                if (uErr) return NextResponse.json({ error: uErr.message }, { status: 400 });
+                const { data: user, error: uErr } = await supabase.from('profiles').select('balance').eq('id', userId).maybeSingle();
+                if (uErr || !user) return NextResponse.json({ error: uErr?.message || "Профиль не найден" }, { status: 400 });
                 
                 const newBal = parseFloat(user.balance) + amount;
                 await supabase.from('profiles').update({ balance: newBal }).eq('id', userId);
@@ -164,14 +165,14 @@ export async function POST(request) {
             if (amount <= 0) return NextResponse.json({ error: "Сумма перевода должна быть больше нуля!" }, { status: 400 });
             
             if (supabase) {
-                const { data: sender, error: sErr } = await supabase.from('profiles').select('*').eq('id', senderId).single();
-                if (sErr) return NextResponse.json({ error: sErr.message }, { status: 400 });
+                const { data: sender, error: sErr } = await supabase.from('profiles').select('*').eq('id', senderId).maybeSingle();
+                if (sErr || !sender) return NextResponse.json({ error: sErr?.message || "Отправитель не найден!" }, { status: 400 });
                 
                 if (parseFloat(sender.balance) < amount) {
                     return NextResponse.json({ error: "Недостаточно средств на балансе!" }, { status: 400 });
                 }
                 
-                const { data: recipient, error: rErr } = await supabase.from('profiles').select('*').eq('static_id', targetStaticId).single();
+                const { data: recipient, error: rErr } = await supabase.from('profiles').select('*').eq('static_id', targetStaticId).maybeSingle();
                 if (rErr || !recipient) return NextResponse.json({ error: "Получатель с таким CID не найден!" }, { status: 404 });
                 
                 if (recipient.id === sender.id) return NextResponse.json({ error: "Нельзя переводить самому себе!" }, { status: 400 });
@@ -237,7 +238,7 @@ export async function POST(request) {
         else if (action === 'saveAdminUserSettings') {
             // Admin role check
             if (supabase) {
-                const { data: adminUser } = await supabase.from('profiles').select('role').eq('id', adminUserId).single();
+                const { data: adminUser } = await supabase.from('profiles').select('role').eq('id', adminUserId).maybeSingle();
                 if (!adminUser || !['OWNER', 'Developer'].includes(adminUser.role)) {
                     return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
                 }
@@ -266,7 +267,7 @@ export async function POST(request) {
             if (!prompt) return NextResponse.json({ error: "Промпт пуст" }, { status: 400 });
             
             if (supabase) {
-                const { data: adminUser } = await supabase.from('profiles').select('role').eq('id', adminUserId).single();
+                const { data: adminUser } = await supabase.from('profiles').select('role').eq('id', adminUserId).maybeSingle();
                 if (!adminUser || !['OWNER', 'Developer'].includes(adminUser.role)) {
                     return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
                 }

@@ -74,12 +74,32 @@ export async function POST(request) {
                 const { data, error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) return NextResponse.json({ error: error.message }, { status: 401 });
                 
-                const { data: profile, error: pError } = await supabase
+                let { data: profile, error: pError } = await supabase
                     .from('profiles')
                     .select('*')
                     .eq('id', data.user.id)
-                    .single();
+                    .maybeSingle();
+                
                 if (pError) return NextResponse.json({ error: pError.message }, { status: 500 });
+                
+                if (!profile) {
+                    // Self-healing: automatically create the public profile row if missing
+                    const newProfile = {
+                        id: data.user.id,
+                        email: data.user.email,
+                        character_name: data.user.user_metadata?.character_name || 'Arthur_Moriarty',
+                        static_id: data.user.user_metadata?.static_id || `ID-${Math.floor(Math.random() * 9000 + 1000)}`,
+                        role: data.user.user_metadata?.role || 'MEMBER',
+                        balance: 50000.00,
+                        warns_count: 0,
+                        created_at: new Date().toISOString()
+                    };
+                    
+                    const { error: insErr } = await supabase.from('profiles').insert(newProfile);
+                    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+                    
+                    profile = newProfile;
+                }
                 
                 return NextResponse.json({ user: { ...profile, email: data.user.email } });
             } else {
