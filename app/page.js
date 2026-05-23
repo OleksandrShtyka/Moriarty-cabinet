@@ -1237,6 +1237,90 @@ export default function Home() {
         return `https://api.dicebear.com/7.x/pixel-art/svg?seed=${encodeURIComponent(name || 'Moriarty')}&backgroundColor=cda242`;
     };
 
+    const getNotifications = () => {
+        const notifications = [];
+        
+        if (isOwnerOrDev) {
+            // Admin alerts
+            treasuryRequests.forEach(req => {
+                if (req.status === 'PENDING') {
+                    notifications.push({
+                        id: `tr-${req.id}`,
+                        type: 'treasury',
+                        title: 'Запрос в казну',
+                        text: `Боец ${req.character_name} (CID: ${req.static_id}) подал заявку на ${req.type === 'DEPOSIT' ? 'ВЗНОС' : 'ВЫДАЧУ'} средств в размере ${formatCurrency(req.amount)}.`,
+                        meta: req.description ? `Обоснование: ${req.description}` : 'Без описания',
+                        date: req.created_at,
+                        action: () => {
+                            setActiveTab('settings');
+                            setSettingsSubTab('admin');
+                            setAdminSubTab('treasury');
+                        },
+                        btnText: 'Рассмотреть заявку'
+                    });
+                }
+            });
+            
+            allFeedbacks.forEach(fb => {
+                if (fb.status === 'PENDING') {
+                    notifications.push({
+                        id: `fb-${fb.id}`,
+                        type: fb.type === 'COMPLAINT' ? 'complaint' : 'suggestion',
+                        title: fb.type === 'COMPLAINT' ? 'Жалоба на бойца' : 'Предложение синдикату',
+                        text: fb.type === 'COMPLAINT' 
+                            ? `Поступило обращение от бойца ID: ${fb.user_id} на члена семьи: ${fb.target_member}.` 
+                            : `Новое предложение по развитию синдиката от бойца ID: ${fb.user_id}.`,
+                        meta: `Содержание: ${fb.text}`,
+                        date: fb.created_at,
+                        action: () => {
+                            setActiveTab('settings');
+                            setSettingsSubTab('admin');
+                            setAdminSubTab('feedback');
+                        },
+                        btnText: 'Проверить репорт'
+                    });
+                }
+            });
+        } else {
+            // Normal user alerts
+            treasuryRequests.forEach(req => {
+                if (req.status !== 'PENDING') {
+                    notifications.push({
+                        id: `tr-user-${req.id}`,
+                        type: req.status === 'APPROVED' ? 'success-update' : 'error-update',
+                        title: `Запрос в казну ${req.status === 'APPROVED' ? 'одобрен' : 'отклонен'}`,
+                        text: `Ваша заявка на ${req.type === 'DEPOSIT' ? 'взнос' : 'выдачу'} ${formatCurrency(req.amount)} была ${req.status === 'APPROVED' ? 'успешно подтверждена старшим составом' : 'отклонена руководством'}.`,
+                        meta: req.admin_comment ? `Вердикт: ${req.admin_comment}` : '',
+                        date: req.created_at,
+                        action: () => {
+                            setActiveTab('balance');
+                        },
+                        btnText: 'В кошелек'
+                    });
+                }
+            });
+            
+            feedbackList.forEach(fb => {
+                if (fb.status !== 'PENDING') {
+                    notifications.push({
+                        id: `fb-user-${fb.id}`,
+                        type: fb.status === 'APPROVED' ? 'success-update' : 'error-update',
+                        title: `Ваше обращение ${fb.status === 'APPROVED' ? 'принято' : 'отклонено'}`,
+                        text: `Ваше ${fb.type === 'SUGGESTION' ? 'предложение' : 'жалоба'} получило официальный вердикт старшего состава.`,
+                        meta: fb.admin_comment ? `Ответ руководства: ${fb.admin_comment}` : '',
+                        date: fb.created_at,
+                        action: () => {
+                            setActiveTab('feedback');
+                        },
+                        btnText: 'Посмотреть ответ'
+                    });
+                }
+            });
+        }
+        
+        return notifications.sort((a, b) => new Date(b.date) - new Date(a.date));
+    };
+
     const formatCurrency = (val) => {
         return `$${parseFloat(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
@@ -1485,6 +1569,20 @@ export default function Home() {
                             </a>
                         </li>
                         
+                        <li className="nav-item">
+                            <a 
+                                className={`nav-link ${activeTab === 'notifications' ? 'active' : ''}`}
+                                onClick={() => { setActiveTab('notifications'); setMobileMenuOpen(false); }}
+                            >
+                                <i className="fa-solid fa-bell"></i>
+                                <span>Уведомления</span>
+                                {getNotifications().length > 0 && (
+                                    <span className="nav-link-badge">
+                                        {getNotifications().length}
+                                    </span>
+                                )}
+                            </a>
+                        </li>
                         <li className="nav-item">
                             <a 
                                 className={`nav-link ${activeTab === 'settings' ? 'active' : ''}`}
@@ -1982,6 +2080,60 @@ export default function Home() {
                             </button>
                         </form>
 
+                    </div>
+                </div>
+
+                {/* 6.5. NOTIFICATIONS CENTER TAB */}
+                <div className={`tab-panel ${activeTab === 'notifications' ? 'active' : ''}`}>
+                    <div className="notification-grid">
+                        <div className="cyber-panel glow-purple" style={{ padding: '2rem' }}>
+                            <h3 style={{ marginBottom: '1.2rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <i className="fa-solid fa-bell" style={{ color: 'var(--primary-neon)' }}></i>
+                                Центр Уведомлений Синдиката
+                            </h3>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                {isOwnerOrDev 
+                                    ? 'Здесь отображаются все нерешенные дисциплинарные дела, жалобы бойцов и новые заявки на финансирование из казны.' 
+                                    : 'Здесь вы можете отслеживать одобрения ваших заявок в казну, а также ответы руководства на ваши жалобы и предложения.'}
+                            </p>
+                        </div>
+
+                        {getNotifications().length === 0 ? (
+                            <div className="cyber-panel empty-state" style={{ textAlign: 'center', padding: '3.5rem' }}>
+                                <i className="fa-solid fa-bell-slash" style={{ fontSize: '3rem', color: 'var(--text-muted)', marginBottom: '1rem', opacity: 0.3 }}></i>
+                                <p style={{ color: 'var(--text-muted)' }}>Все чисто. Новые уведомления отсутствуют.</p>
+                            </div>
+                        ) : (
+                            getNotifications().map((notif) => (
+                                <div key={notif.id} className={`notification-card ${notif.type}`}>
+                                    <div className="notification-header">
+                                        <span className="notification-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <i className={`fa-solid ${
+                                                notif.type === 'treasury' ? 'fa-vault' 
+                                                : notif.type === 'complaint' ? 'fa-face-angry' 
+                                                : notif.type === 'suggestion' ? 'fa-lightbulb' 
+                                                : 'fa-envelope-open-text'
+                                            }`} style={{ color: 'inherit' }}></i>
+                                            {notif.title}
+                                        </span>
+                                        <span className="notification-date">{formatDate(notif.date)}</span>
+                                    </div>
+                                    <p className="notification-text">{notif.text}</p>
+                                    {notif.meta && (
+                                        <div className="notification-meta">
+                                            {notif.meta}
+                                        </div>
+                                    )}
+                                    <button 
+                                        type="button" 
+                                        className="btn-primary notification-action-btn"
+                                        onClick={notif.action}
+                                    >
+                                        {notif.btnText}
+                                    </button>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </div>
 
