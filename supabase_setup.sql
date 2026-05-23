@@ -65,20 +65,20 @@ VALUES (
 )
 ON CONFLICT (key) DO NOTHING;
 
--- 7. Seed standard mock accounts for testing (Email logins)
+-- 7. Seed standard mock accounts for testing (Email logins with VALID HEXADECIMAL UUIDs)
 INSERT INTO public.profiles (id, email, character_name, static_id, role, balance, warns_count)
 VALUES 
-  ('owner-uuid-1111-2222', 'owner@moriarty.fam', 'Moriarty_Boss', '1', 'OWNER', 15250000.00, 0),
-  ('dev-uuid-3333-4444', 'developer@moriarty.fam', 'Alex_Moriarty', '777', 'Developer', 5450000.00, 0),
-  ('mod-uuid-5555-6666', 'moderator@moriarty.fam', 'Dmitry_Moriarty', '4452', 'MODERATOR', 650000.00, 1),
-  ('member-uuid-7777-8888', 'member@moriarty.fam', 'John_Moriarty', '10245', 'MEMBER', 50000.00, 0)
+  ('11111111-1111-1111-1111-111111111111', 'owner@moriarty.fam', 'Moriarty_Boss', '1', 'OWNER', 15250000.00, 0),
+  ('22222222-2222-2222-2222-222222222222', 'developer@moriarty.fam', 'Alex_Moriarty', '777', 'Developer', 5450000.00, 0),
+  ('33333333-3333-3333-3333-333333333333', 'moderator@moriarty.fam', 'Dmitry_Moriarty', '4452', 'MODERATOR', 650000.00, 1),
+  ('44444444-4444-4444-4444-444444444444', 'member@moriarty.fam', 'John_Moriarty', '10245', 'MEMBER', 50000.00, 0)
 ON CONFLICT (static_id) DO NOTHING;
 
--- 8. Seed a default warn and complaint
+-- 8. Seed a default warn and complaint (linking to VALID HEXADECIMAL UUIDs)
 INSERT INTO public.warns (id, user_id, reason, issued_by, status)
-VALUES ('warn-1', 'mod-uuid-5555-6666', 'Опоздание на семейный сбор / сбор граффити', 'Moriarty_Boss', 'ACTIVE')
+VALUES ('77777777-7777-7777-7777-777777777777', '33333333-3333-3333-3333-333333333333', 'Опоздание на семейный сбор / сбор граффити', 'Moriarty_Boss', 'ACTIVE')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.feedback (id, user_id, type, target_member, text, status)
-VALUES ('fb-2', 'member-uuid-7777-8888', 'COMPLAINT', 'Narek_Toretto', 'Берет семейный транспорт без спроса и бросает без бензина на трассе.', 'PENDING')
+VALUES ('88888888-8888-8888-8888-888888888888', '44444444-4444-4444-4444-444444444444', 'COMPLAINT', 'Narek_Toretto', 'Берет семейный транспорт без спроса и бросает без бензина на трассе.', 'PENDING')
 ON CONFLICT (id) DO NOTHING;
