@@ -53,7 +53,14 @@ export async function POST(request) {
             discordClientSecret: body.discordClientSecret !== undefined ? body.discordClientSecret : current.discordClientSecret
         };
         
-        fs.writeFileSync(CONFIG_PATH, JSON.stringify(updated, null, 2), 'utf-8');
+        try {
+            fs.writeFileSync(CONFIG_PATH, JSON.stringify(updated, null, 2), 'utf-8');
+        } catch (fsErr) {
+            console.warn("Serverless environment detected, writing to config.json blocked:", fsErr.message);
+            return NextResponse.json({ 
+                error: "Сервер запущен в среде Serverless (Vercel). Запись файлов на диск заблокирована системой. Пожалуйста, пропишите эти ключи в панели управления Vercel -> Settings -> Environment Variables!" 
+            }, { status: 403 });
+        }
         
         return NextResponse.json({
             success: true,
