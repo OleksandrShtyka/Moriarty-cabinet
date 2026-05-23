@@ -6,18 +6,11 @@ import { getDemoDb, saveDemoDb } from '../route';
 
 const CONFIG_PATH = path.join(process.cwd(), 'config.json');
 
-function readConfig() {
-    if (!fs.existsSync(CONFIG_PATH)) return {};
-    try {
-        return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
-    } catch (e) {
-        return {};
-    }
-}
+import { getServerConfig } from '../../config/route';
 
 // Helper to obtain Supabase Client
 function getSupabaseClient() {
-    const config = readConfig();
+    const config = getServerConfig();
     if (config.supabaseUrl && config.supabaseAnonKey) {
         return createClient(config.supabaseUrl, config.supabaseAnonKey);
     }
@@ -30,7 +23,7 @@ export async function POST(request) {
         const body = await request.json();
         const { simulate, code, redirectUri } = body;
         
-        const config = readConfig();
+        const config = getServerConfig();
         const supabase = getSupabaseClient();
         
         let discordUser = null;

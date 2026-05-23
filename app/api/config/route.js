@@ -15,17 +15,28 @@ function readConfig() {
     }
 }
 
-export async function GET() {
+export function getServerConfig() {
     const config = readConfig();
+    return {
+        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || config.supabaseUrl || '',
+        supabaseAnonKey: process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || config.supabaseAnonKey || '',
+        geminiApiKey: process.env.GEMINI_API_KEY || config.geminiApiKey || '',
+        discordClientId: process.env.DISCORD_CLIENT_ID || config.discordClientId || '',
+        discordClientSecret: process.env.DISCORD_CLIENT_SECRET || config.discordClientSecret || ''
+    };
+}
+
+export async function GET() {
+    const serverConfig = getServerConfig();
     return NextResponse.json({
-        isSupabaseMode: !!(config.supabaseUrl && config.supabaseAnonKey),
-        hasGeminiApiKey: !!config.geminiApiKey,
-        supabaseUrl: config.supabaseUrl,
-        hasDiscordConfig: !!(config.discordClientId && config.discordClientSecret),
-        discordClientId: config.discordClientId,
+        isSupabaseMode: !!(serverConfig.supabaseUrl && serverConfig.supabaseAnonKey),
+        hasGeminiApiKey: !!serverConfig.geminiApiKey,
+        supabaseUrl: serverConfig.supabaseUrl,
+        hasDiscordConfig: !!(serverConfig.discordClientId && serverConfig.discordClientSecret),
+        discordClientId: serverConfig.discordClientId,
         // Mask sensitive items
-        supabaseAnonKeyObfuscated: config.supabaseAnonKey ? `${config.supabaseAnonKey.slice(0, 8)}...` : '',
-        geminiApiKeyObfuscated: config.geminiApiKey ? `${config.geminiApiKey.slice(0, 6)}...` : ''
+        supabaseAnonKeyObfuscated: serverConfig.supabaseAnonKey ? `${serverConfig.supabaseAnonKey.slice(0, 8)}...` : '',
+        geminiApiKeyObfuscated: serverConfig.geminiApiKey ? `${serverConfig.geminiApiKey.slice(0, 6)}...` : ''
     });
 }
 

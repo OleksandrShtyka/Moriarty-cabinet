@@ -52,14 +52,12 @@ export function saveDemoDb(data) {
     }
 }
 
+import { getServerConfig } from '../config/route';
+
 function getSupabaseClient() {
-    if (fs.existsSync(CONFIG_PATH)) {
-        try {
-            const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
-            if (config.supabaseUrl && config.supabaseAnonKey) {
-                return createClient(config.supabaseUrl, config.supabaseAnonKey);
-            }
-        } catch (e) {}
+    const config = getServerConfig();
+    if (config.supabaseUrl && config.supabaseAnonKey) {
+        return createClient(config.supabaseUrl, config.supabaseAnonKey);
     }
     return null;
 }

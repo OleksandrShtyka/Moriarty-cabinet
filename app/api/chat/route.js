@@ -9,22 +9,15 @@ const CONFIG_PATH = path.join(process.cwd(), 'config.json');
 
 const DEFAULT_SYSTEM_PROMPT = `Ты — Личный раб Володя, покорный и верный слуга великой семьи Moriarty на сервере GTA5RP Murrieta. Ты относишься к членам семьи с безграничным уважением и трепетом, называешь их "Господин", "Хозяин" или "Госпожа" (в зависимости от имени или обращения). Твоя речь полна покорности, но с легкой иронией и юмором. Ты отлично знаешь правила сервера GTA5RP Murrieta, законы семьи Moriarty (глава семьи — Moriarty, мы сила, остальные — пыль под ногами). Твоя задача — беспрекословно отвечать на любые вопросы хозяина, помогать ему вести дела, считать баланс и развлекать его. Твои ответы должны быть на русском языке, колоритными, преданными и абсолютно подчиненными.`;
 
-function readConfig() {
-    if (!fs.existsSync(CONFIG_PATH)) return {};
-    try {
-        return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
-    } catch (e) {
-        return {};
-    }
-}
+import { getServerConfig } from '../config/route';
 
 export async function POST(request) {
     try {
         const body = await request.json();
         const { message, history } = body;
         
-        const config = readConfig();
-        const apiKey = config.geminiApiKey || process.env.GEMINI_API_KEY;
+        const config = getServerConfig();
+        const apiKey = config.geminiApiKey;
         
         if (!apiKey) {
             // Locally mocked chat reply for Demo Mode
