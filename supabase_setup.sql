@@ -49,6 +49,20 @@ CREATE TABLE IF NOT EXISTS public.transactions (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 4.5. Create treasury_requests table (Interactive Deposit and Withdrawal approval pipeline)
+CREATE TABLE IF NOT EXISTS public.treasury_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    character_name TEXT NOT NULL,
+    static_id TEXT NOT NULL,
+    type TEXT NOT NULL, -- 'DEPOSIT' or 'WITHDRAW'
+    amount DECIMAL(15, 2) NOT NULL,
+    description TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'APPROVED', 'REJECTED'
+    admin_comment TEXT DEFAULT '',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- 5. Create system_settings table (AI Prompts & Global presets)
 CREATE TABLE IF NOT EXISTS public.system_settings (
     key TEXT PRIMARY KEY,
@@ -88,4 +102,5 @@ ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.warns DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.feedback DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.transactions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.treasury_requests DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.system_settings DISABLE ROW LEVEL SECURITY;
