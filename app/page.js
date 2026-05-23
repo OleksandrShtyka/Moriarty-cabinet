@@ -421,6 +421,22 @@ export default function Home() {
                     discordClientId: data.discordClientId || '',
                     discordClientSecret: ''
                 });
+
+                // SELF-HEALING SESSION SANITIZATION
+                if (data.isSupabaseMode) {
+                    const storedUser = localStorage.getItem('moriarty_user');
+                    if (storedUser) {
+                        const parsed = JSON.parse(storedUser);
+                        const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                        if (parsed.id && !regex.test(parsed.id)) {
+                            console.warn("[SELF-HEALING] Invalid demo ID format detected in Supabase Cloud mode. Purging local cache.");
+                            localStorage.removeItem('moriarty_user');
+                            setUser(null);
+                            setProfile(null);
+                            addToast("Сессия сброшена для синхронизации с облаком Supabase.", "info");
+                        }
+                    }
+                }
             }
         } catch (e) {
             console.error("Failed to load server config", e);
@@ -1398,11 +1414,13 @@ export default function Home() {
             <aside className={`sidebar ${mobileMenuOpen ? 'mobile-open' : ''}`}>
                 <div>
                     <div className="sidebar-header">
-                        <img 
-                            src={activeProfile.discord?.avatar || getProceduralAvatar(activeProfile.character_name)} 
-                            alt="Crest" 
-                            className="sidebar-logo"
-                        />
+                        <div className="sidebar-logo">
+                            <img 
+                                src={activeProfile.discord?.avatar || getProceduralAvatar(activeProfile.character_name)} 
+                                alt="Crest" 
+                                style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }}
+                            />
+                        </div>
                         <div>
                             <h3 className="brand-text sidebar-title">Moriarty</h3>
                             <span className="sidebar-subtitle">Кабинет</span>
@@ -1539,19 +1557,23 @@ export default function Home() {
                 {/* 1. CHARACTER STATS TAB */}
                 <div className={`tab-panel ${activeTab === 'stats' ? 'active' : ''}`}>
                     <div className="stats-banner glass-panel glow-purple animate-fade-in">
-                        <div 
-                            className="avatar-container-wrap" 
-                            onClick={() => {
-                                setCustomAvatarUrl(activeProfile.discord?.avatar || '');
-                                setShowAvatarModal(true);
-                            }}
-                            title="Сменить аватарку"
-                        >
-                            <div className="avatar-large">
-                                <img src={activeProfile.discord?.avatar || getProceduralAvatar(activeProfile.character_name)} alt="Av" />
-                            </div>
-                            <div className="avatar-edit-overlay">
-                                <i className="fa-solid fa-gear"></i>
+                        <div className="avatar-large-container" style={{ margin: 0 }}>
+                            <div className="avatar-rotating-ring" style={{ width: '146px', height: '146px' }}></div>
+                            <div 
+                                className="avatar-container-wrap" 
+                                onClick={() => {
+                                    setCustomAvatarUrl(activeProfile.discord?.avatar || '');
+                                    setShowAvatarModal(true);
+                                }}
+                                title="Сменить аватарку"
+                                style={{ width: '120px', height: '120px' }}
+                            >
+                                <div className="avatar-large">
+                                    <img src={activeProfile.discord?.avatar || getProceduralAvatar(activeProfile.character_name)} alt="Av" />
+                                </div>
+                                <div className="avatar-edit-overlay" style={{ borderRadius: '12px' }}>
+                                    <i className="fa-solid fa-gear"></i>
+                                </div>
                             </div>
                         </div>
                         <div className="banner-profile-info">
@@ -1912,6 +1934,15 @@ export default function Home() {
                                     </h3>
                                     <span className="chat-banner-status">Готов к повиновению</span>
                                 </div>
+                            </div>
+
+                            {/* Animated Cyber Audio Visualizer */}
+                            <div className="audio-visualizer-wave" style={{ marginRight: 'auto', marginLeft: '25px' }}>
+                                <div className="audio-bar"></div>
+                                <div className="audio-bar"></div>
+                                <div className="audio-bar"></div>
+                                <div className="audio-bar"></div>
+                                <div className="audio-bar"></div>
                             </div>
                             
                             <div className="chat-quick-presets">
