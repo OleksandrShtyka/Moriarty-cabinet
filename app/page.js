@@ -98,6 +98,21 @@ export default function Home() {
     // Mobile navigation state
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+    // 2026 Faction features: Treasury, PC photo upload, flexible Warnings & Feedback
+    const [treasuryRequests, setTreasuryRequests] = useState([]);
+    const [showTreasuryRequestModal, setShowTreasuryRequestModal] = useState(false);
+    const [reqAmount, setReqAmount] = useState('');
+    const [reqType, setReqType] = useState('DEPOSIT');
+    const [reqDescription, setReqDescription] = useState('');
+
+    const [allFeedbacks, setAllFeedbacks] = useState([]);
+    const [adminReplyText, setAdminReplyText] = useState('');
+    const [warnReason, setWarnReason] = useState('');
+    const [adminTreasuryComment, setAdminTreasuryComment] = useState('');
+    const [selectedUserWarns, setSelectedUserWarns] = useState([]);
+    const [adminSubTab, setAdminSubTab] = useState('users');
+
+
     // Toast Add Helper
     const addToast = (msg, type = 'success') => {
         const id = 'toast-' + Math.random().toString(36).substr(2, 9);
@@ -284,6 +299,13 @@ export default function Home() {
             if (refRes.ok) {
                 const refData = await refRes.json();
                 setReferrals(refData);
+            }
+            
+            // Get treasury requests
+            const trRes = await fetch(`/api/db?action=getTreasuryRequests&userId=${uid}`);
+            if (trRes.ok) {
+                const trData = await trRes.json();
+                setTreasuryRequests(trData);
             }
         } catch (e) {
             console.error("Failed to sync cabinet details:", e);
@@ -501,6 +523,114 @@ export default function Home() {
         );
     };
 
+    // Submit a request to the Treasury (ordinary users)
+    const handleTreasuryRequestSubmit = async (e) => {
+        e.preventDefault();
+        const amt = parseFloat(reqAmount);
+        if (isNaN(amt) || amt <= 0) {
+            addToast("Введите корректную сумму больше нуля!", "error");
+            return;
+        }
+
+        triggerConfirm(
+            "Отправка запроса в казну",
+            `Вы отправляете запрос на ${reqType === 'DEPOSIT' ? 'ВЗНОС' : 'ВЫДАЧУ'} средств в размере $${amt.toLocaleString()} с обоснованием: "${reqDescription}". Данный запрос будет проверен старшим составом. Отправить?`,
+            async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/db', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'submitTreasuryRequest',
+                            userId: user.id,
+                            type: reqType,
+                            amount: amt,
+                            description: reqDescription
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Failed to submit treasury request");
+
+                    addToast("Запрос в казну успешно подан старшему составу!", "success");
+                    setShowTreasuryRequestModal(false);
+                    setReqAmount('');
+                    setReqDescription('');
+                    refreshUserData(user.id);
+                } catch (err) {
+                    addToast(err.message, "error");
+                } finally {
+                    setLoading(false);
+                }
+            },
+            "Отправить запрос",
+            "Отмена"
+        );
+    };
+
+    // Approve a treasury request (Admin only)
+    const handleApproveTreasuryRequest = async (requestId, comment) => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-userid': user.id
+                },
+                body: JSON.stringify({
+                    action: 'approveTreasuryRequest',
+                    requestId,
+                    adminComment: comment || adminTreasuryComment
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Approval failed");
+
+            addToast("Запрос одобрен, баланс участника обновлен!", "success");
+            setAdminTreasuryComment('');
+            loadAdminData();
+            refreshUserData(user.id);
+        } catch (err) {
+            addToast(err.message, "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Reject a treasury request (Admin only)
+    const handleRejectTreasuryRequest = async (requestId, comment) => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-userid': user.id
+                },
+                body: JSON.stringify({
+                    action: 'rejectTreasuryRequest',
+                    requestId,
+                    adminComment: comment || adminTreasuryComment
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Rejection failed");
+
+            addToast("Запрос в казну отклонен старшим составом.", "info");
+            setAdminTreasuryComment('');
+            loadAdminData();
+            refreshUserData(user.id);
+        } catch (err) {
+            addToast(err.message, "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Avatar Custom URL change submit
     const handleAvatarUpdate = async (e) => {
         e.preventDefault();
@@ -527,6 +657,25 @@ export default function Home() {
         } finally {
             setLoading(false);
         }
+    };
+
+    // Convert local PC image to Base64 dataURL
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        if (file.size > 2 * 1024 * 1024) {
+            addToast("Файл слишком большой! Лимит — 2 МБ.", "error");
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const base64 = event.target.result;
+            setCustomAvatarUrl(base64);
+            addToast("Изображение загружено с ПК и закодировано!", "success");
+        };
+        reader.readAsDataURL(file);
     };
 
     // Feedback Suggestion / Complaint Submit
@@ -632,7 +781,7 @@ export default function Home() {
 
     // Fetch and Load users for ADMIN Panel
     const loadAdminData = async () => {
-        if (!user || !['OWNER', 'Developer'].includes(profile?.role)) return;
+        if (!user || !['OWNER', 'Developer', 'MODERATOR'].includes(profile?.role)) return;
         setLoading(true);
         try {
             const res = await fetch(`/api/db?action=getAdminUsers`, {
@@ -649,6 +798,24 @@ export default function Home() {
                 }
                 setSystemPrompt(localStorage.getItem('moriarty_system_prompt') || 'Ты — Личный раб Володя, покорный и верный слуга великой семьи Moriarty на сервере GTA5RP Murrieta. Ты относишься к членам семьи с безграничным уважением и трепетом, называешь их "Господин", "Хозяин" или "Госпожа".');
             }
+
+            // Also load all feedbacks for audit
+            const fbRes = await fetch(`/api/db?action=getAllFeedback`, {
+                headers: { 'x-admin-userid': user.id }
+            });
+            if (fbRes.ok) {
+                const fbData = await fbRes.json();
+                setAllFeedbacks(fbData);
+            }
+
+            // Also load all treasury requests for audit
+            const trRes = await fetch(`/api/db?action=getTreasuryRequests`, {
+                headers: { 'x-admin-userid': user.id }
+            });
+            if (trRes.ok) {
+                const trData = await trRes.json();
+                setTreasuryRequests(trData);
+            }
         } catch (e) {
             console.error("Failed to load admin lists", e);
         } finally {
@@ -663,11 +830,25 @@ export default function Home() {
         }
     }, [activeTab, settingsSubTab]);
 
+    const loadSelectedUserWarns = async (targetId) => {
+        if (!targetId) return;
+        try {
+            const res = await fetch(`/api/db?action=getWarns&userId=${targetId}`);
+            if (res.ok) {
+                const data = await res.json();
+                setSelectedUserWarns(data);
+            }
+        } catch (err) {
+            console.error("Failed to fetch warnings for selected user", err);
+        }
+    };
+
     const selectAdminUser = (u) => {
         setSelectedAdminUser(u);
         setEditRole(u.role);
         setEditWarns(u.warns_count);
         setEditBalance(u.balance);
+        loadSelectedUserWarns(u.id);
     };
 
     // Admin save character stats updates
@@ -773,7 +954,121 @@ export default function Home() {
             setLoading(false);
         }
     };
+    // Admin: Issue Warning to any User
+    const handleIssueWarn = async (e) => {
+        e.preventDefault();
+        if (!selectedAdminUser || !warnReason.trim()) {
+            addToast("Выберите бойца и укажите причину выговора!", "error");
+            return;
+        }
 
+        triggerConfirm(
+            "Выдача выговора участнику",
+            `Вы действительно хотите выдать активный выговор бойцу ${selectedAdminUser.character_name} по причине: "${warnReason.trim()}"? Это действие увеличит его счетчик нарушений.`,
+            async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/db', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-admin-userid': user.id
+                        },
+                        body: JSON.stringify({
+                            action: 'addWarn',
+                            targetUserId: selectedAdminUser.id,
+                            reason: warnReason.trim()
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Failed to add warning");
+
+                    addToast(`Выговор успешно выдан бойцу ${selectedAdminUser.character_name}!`, "success");
+                    setWarnReason('');
+                    loadAdminData();
+                    loadSelectedUserWarns(selectedAdminUser.id);
+                    refreshUserData(user.id);
+                } catch (err) {
+                    addToast(err.message, "error");
+                } finally {
+                    setLoading(false);
+                }
+            },
+            "Выдать выговор",
+            "Отмена"
+        );
+    };
+
+    // Admin: Lift/Expire Warning
+    const handleLiftWarn = async (warnId, warnReasonText) => {
+        triggerConfirm(
+            "Снятие дисциплинарного взыскания",
+            `Вы действительно хотите аннулировать/снять данный выговор ("${warnReasonText}")? Статус выговора изменится на "Снят/Истек".`,
+            async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/db', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-admin-userid': user.id
+                        },
+                        body: JSON.stringify({
+                            action: 'liftWarn',
+                            warnId
+                        })
+                    });
+
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Failed to lift warning");
+
+                    addToast("Выговор успешно аннулирован!", "success");
+                    loadAdminData();
+                    loadSelectedUserWarns(selectedAdminUser.id);
+                    refreshUserData(user.id);
+                } catch (err) {
+                    addToast(err.message, "error");
+                } finally {
+                    setLoading(false);
+                }
+            },
+            "Снять выговор",
+            "Отмена"
+        );
+    };
+
+    // Admin: Reply to Suggestions/Complaints and resolve status
+    const handleReplyFeedback = async (feedbackId, text, nextStatus) => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-admin-userid': user.id
+                },
+                body: JSON.stringify({
+                    action: 'replyFeedback',
+                    feedbackId,
+                    replyText: text || adminReplyText,
+                    status: nextStatus
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to reply to feedback");
+
+            addToast(`Обращение обработано, статус изменен на ${nextStatus === 'APPROVED' ? 'ОДОБРЕНО' : 'ОТКЛОНЕНО'}!`, "success");
+            setAdminReplyText('');
+            loadAdminData();
+            refreshUserData(user.id);
+        } catch (err) {
+            addToast(err.message, "error");
+        } finally {
+            setLoading(false);
+        }
+    };
     // Connections Settings changes
     const handleConfigSave = async (e) => {
         e.preventDefault();
@@ -996,7 +1291,7 @@ export default function Home() {
 
     // Active logged-in layout
     const activeProfile = profile || user;
-    const isOwnerOrDev = ['OWNER', 'Developer'].includes(activeProfile?.role);
+    const isOwnerOrDev = ['OWNER', 'Developer', 'MODERATOR'].includes(activeProfile?.role);
     
     // Warn indicators calculations
     const displayWarns = activeProfile?.warns_count || 0;
@@ -1088,6 +1383,17 @@ export default function Home() {
                             </a>
                         </li>
                     </ul>
+                </div>
+
+                {/* Faction Discord Join Banner */}
+                <div className="discord-banner-sidebar" style={{ margin: '1rem' }}>
+                    <i className="fa-brands fa-discord animate-pulse" style={{ fontSize: '2rem', color: '#5865f2', filter: 'drop-shadow(0 0 6px rgba(88,101,242,0.4))' }}></i>
+                    <h4 style={{ margin: '6px 0 2px', fontSize: '0.82rem', fontWeight: '800' }}>Наш Discord</h4>
+                    <p style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Будь в центре событий синдиката!</p>
+                    <a href="https://discord.gg/AjtjVC2hm2" target="_blank" rel="noopener noreferrer" className="btn-discord-join">
+                        <i className="fa-solid fa-right-to-bracket"></i>
+                        Вступить
+                    </a>
                 </div>
 
                 <div className="sidebar-footer">
@@ -1208,9 +1514,9 @@ export default function Home() {
                             <span className="sidebar-subtitle" style={{ letterSpacing: '3px' }}>Личная ячейка</span>
                             <div className="balance-huge">{formatCurrency(activeProfile.balance)}</div>
                             <div className="balance-actions">
-                                <button className="btn-primary" onClick={() => setShowDepositModal(true)}>
-                                    <i className="fa-solid fa-plus"></i>
-                                    <span>Вложить в казну</span>
+                                <button className="btn-primary" onClick={() => setShowTreasuryRequestModal(true)}>
+                                    <i className="fa-solid fa-vault"></i>
+                                    <span>Заявка в казну</span>
                                 </button>
                                 <button className="btn-secondary" onClick={() => setShowTransferModal(true)}>
                                     <i className="fa-solid fa-arrow-right-arrow-left"></i>
@@ -1219,32 +1525,86 @@ export default function Home() {
                             </div>
                         </div>
 
-                        <div className="glass-panel">
-                            <h3 style={{ marginBottom: '1.4rem' }}>История казны</h3>
-                            <div className="ledger-wrapper">
-                                {transactions.length === 0 ? (
-                                    <div className="empty-state">
-                                        <i className="fa-solid fa-receipt"></i>
-                                        <p>Транзакции отсутствуют</p>
-                                    </div>
-                                ) : (
-                                    transactions.map((tx) => (
-                                        <div key={tx.id} className="ledger-item">
-                                            <div className="ledger-left">
-                                                <div className={`ledger-badge ${tx.type === 'DEPOSIT' ? 'deposit' : tx.type === 'WITHDRAW' ? 'withdraw' : 'transfer'}`}>
-                                                    <i className={`fa-solid ${tx.type === 'DEPOSIT' ? 'fa-arrow-down' : tx.type === 'WITHDRAW' ? 'fa-arrow-up' : 'fa-arrow-right-arrow-left'}`}></i>
+                        <div className="balance-grid-2col" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginTop: '20px' }}>
+                            {/* Left panel: Treasury Requests */}
+                            <div className="glass-panel">
+                                <h3 style={{ marginBottom: '1.4rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <i className="fa-solid fa-clock-rotate-left" style={{ color: 'var(--primary)' }}></i>
+                                    Заявки на согласование
+                                </h3>
+                                <div className="ledger-wrapper" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                    {treasuryRequests.length === 0 ? (
+                                        <div className="empty-state" style={{ padding: '2rem 1rem' }}>
+                                            <i className="fa-solid fa-folder-open"></i>
+                                            <p>Заявки отсутствуют</p>
+                                        </div>
+                                    ) : (
+                                        treasuryRequests.map((req) => (
+                                            <div key={req.id} className="ledger-item" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '8px', padding: '12px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <span style={{ fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                        <i className={`fa-solid ${req.type === 'DEPOSIT' ? 'fa-arrow-down' : 'fa-arrow-up'}`} style={{ color: req.type === 'DEPOSIT' ? 'var(--primary)' : 'var(--danger)' }}></i>
+                                                        {req.type === 'DEPOSIT' ? 'Взнос' : 'Выдача'}
+                                                    </span>
+                                                    <span className={`status-badge ${req.status.toLowerCase()}`} style={{ fontSize: '0.7rem', padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                                                        {req.status === 'PENDING' ? 'Ожидает' : req.status === 'APPROVED' ? 'Одобрен' : 'Отклонен'}
+                                                    </span>
                                                 </div>
-                                                <div className="ledger-info">
-                                                    <span className="ledger-desc">{tx.description}</span>
-                                                    <span className="ledger-date">{formatDate(tx.created_at)}</span>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Сумма:</span>
+                                                    <span style={{ fontWeight: 'bold', color: 'var(--text-bright)' }}>{formatCurrency(req.amount)}</span>
+                                                </div>
+                                                {req.description && (
+                                                    <div style={{ fontSize: '0.8rem', background: 'rgba(0,0,0,0.15)', padding: '6px 8px', borderRadius: '4px', borderLeft: '2px solid var(--primary)', color: 'var(--text-muted)' }}>
+                                                        {req.description}
+                                                    </div>
+                                                )}
+                                                {req.admin_comment && (
+                                                    <div style={{ fontSize: '0.78rem', padding: '4px 8px', color: 'var(--primary)', fontStyle: 'italic', display: 'flex', gap: '4px', alignItems: 'flex-start' }}>
+                                                        <i className="fa-solid fa-comment-dots" style={{ marginTop: '3px' }}></i>
+                                                        <span>Вердикт: {req.admin_comment}</span>
+                                                    </div>
+                                                )}
+                                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textAlign: 'right' }}>
+                                                    {formatDate(req.created_at)}
                                                 </div>
                                             </div>
-                                            <span className={`ledger-amount ${tx.amount > 0 ? 'plus' : 'minus'}`}>
-                                                {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}
-                                            </span>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Right panel: Finalized Transactions */}
+                            <div className="glass-panel">
+                                <h3 style={{ marginBottom: '1.4rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <i className="fa-solid fa-receipt" style={{ color: 'var(--primary)' }}></i>
+                                    История транзакций
+                                </h3>
+                                <div className="ledger-wrapper" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                                    {transactions.length === 0 ? (
+                                        <div className="empty-state" style={{ padding: '2rem 1rem' }}>
+                                            <i className="fa-solid fa-receipt"></i>
+                                            <p>Транзакции отсутствуют</p>
                                         </div>
-                                    ))
-                                )}
+                                    ) : (
+                                        transactions.map((tx) => (
+                                            <div key={tx.id} className="ledger-item">
+                                                <div className="ledger-left">
+                                                    <div className={`ledger-badge ${tx.type === 'DEPOSIT' ? 'deposit' : tx.type === 'WITHDRAW' ? 'withdraw' : 'transfer'}`}>
+                                                        <i className={`fa-solid ${tx.type === 'DEPOSIT' ? 'fa-arrow-down' : tx.type === 'WITHDRAW' ? 'fa-arrow-up' : 'fa-arrow-right-arrow-left'}`}></i>
+                                                    </div>
+                                                    <div className="ledger-info">
+                                                        <span className="ledger-desc">{tx.description}</span>
+                                                        <span className="ledger-date">{formatDate(tx.created_at)}</span>
+                                                    </div>
+                                                </div>
+                                                <span className={`ledger-amount ${tx.amount > 0 ? 'plus' : 'minus'}`}>
+                                                    {tx.amount > 0 ? '+' : ''}{formatCurrency(tx.amount)}
+                                                </span>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
                             </div>
                         </div>
 
@@ -1776,141 +2136,471 @@ export default function Home() {
                         {/* SUB-PANEL 3: OWNER/DEV ADMIN CONTROLS */}
                         {isOwnerOrDev && settingsSubTab === 'admin' && (
                             <div className="animate-fade-in">
-                                {/* Global System Prompt editor */}
-                                <div className="glass-panel glow-purple" style={{ marginBottom: '2rem' }}>
-                                    <h3 style={{ marginBottom: '1rem' }}><i className="fa-solid fa-brain" style={{ marginRight: '10px', color: 'var(--primary)' }}></i>Прошивка Разума ИИ Володи (Промпт)</h3>
-                                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.2rem' }}>
-                                        Доступно только ролям **OWNER** и **Developer**. Изменение этого промпта мгновенно перепрограммирует ИИ Володю на сервере!
-                                    </p>
-                                    <form onSubmit={handleAdminSavePrompt}>
-                                        <textarea 
-                                            className="input-glow textarea-prompt" 
-                                            value={systemPrompt} 
-                                            onChange={(e) => setSystemPrompt(e.target.value)}
-                                            placeholder="Введите кастомный системный промпт для Gemini ИИ..."
-                                        ></textarea>
-                                        <button type="submit" className="btn-primary" style={{ marginTop: '1.2rem' }} disabled={loading}>
-                                            {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Записать в чип Володе'}
-                                        </button>
-                                    </form>
+                                {/* Admin Inner Navigation Subtabs */}
+                                <div className="admin-inner-nav" style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginBottom: '2rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '15px' }}>
+                                    <button 
+                                        type="button"
+                                        className={`settings-tab-btn ${adminSubTab === 'users' ? 'active' : ''}`}
+                                        onClick={() => setAdminSubTab('users')}
+                                        style={{ fontSize: '0.8rem', padding: '8px 16px' }}
+                                    >
+                                        <i className="fa-solid fa-users" style={{ marginRight: '6px' }}></i>
+                                        Бойцы & Выговоры
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        className={`settings-tab-btn ${adminSubTab === 'treasury' ? 'active' : ''}`}
+                                        onClick={() => setAdminSubTab('treasury')}
+                                        style={{ fontSize: '0.8rem', padding: '8px 16px' }}
+                                    >
+                                        <i className="fa-solid fa-vault" style={{ marginRight: '6px' }}></i>
+                                        Запросы в казну {treasuryRequests.filter(r => r.status === 'PENDING').length > 0 && (
+                                            <span style={{ background: 'var(--primary)', color: '#000', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '50%', fontWeight: 'bold', marginLeft: '4px' }}>
+                                                {treasuryRequests.filter(r => r.status === 'PENDING').length}
+                                            </span>
+                                        )}
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        className={`settings-tab-btn ${adminSubTab === 'feedback' ? 'active' : ''}`}
+                                        onClick={() => setAdminSubTab('feedback')}
+                                        style={{ fontSize: '0.8rem', padding: '8px 16px' }}
+                                    >
+                                        <i className="fa-solid fa-comments" style={{ marginRight: '6px' }}></i>
+                                        Обратная связь {allFeedbacks.filter(f => f.status === 'PENDING').length > 0 && (
+                                            <span style={{ background: 'var(--primary)', color: '#000', fontSize: '0.7rem', padding: '2px 6px', borderRadius: '50%', fontWeight: 'bold', marginLeft: '4px' }}>
+                                                {allFeedbacks.filter(f => f.status === 'PENDING').length}
+                                            </span>
+                                        )}
+                                    </button>
+                                    <button 
+                                        type="button"
+                                        className={`settings-tab-btn ${adminSubTab === 'volodya' ? 'active' : ''}`}
+                                        onClick={() => setAdminSubTab('volodya')}
+                                        style={{ fontSize: '0.8rem', padding: '8px 16px' }}
+                                    >
+                                        <i className="fa-solid fa-brain" style={{ marginRight: '6px' }}></i>
+                                        Разум Володи
+                                    </button>
                                 </div>
 
-                                {/* Database Character controls */}
-                                <div className="admin-grid">
-                                    <div className="glass-panel admin-list-wrap">
-                                        <h3>База Людей</h3>
-                                        <div className="search-bar-wrap">
-                                            <i className="fa-solid fa-magnifying-glass"></i>
+                                {/* TAB 1: USERS DATABASE & WARNS DOSSIER */}
+                                {adminSubTab === 'users' && (
+                                    <div className="admin-grid animate-fade-in">
+                                        {/* User List Panel */}
+                                        <div className="glass-panel admin-list-wrap">
+                                            <h3>База Людей</h3>
+                                            <div className="search-bar-wrap">
+                                                <i className="fa-solid fa-magnifying-glass"></i>
+                                                <input 
+                                                    type="text" 
+                                                    className="input-glow search-input" 
+                                                    placeholder="Поиск по имени / CID..."
+                                                    value={searchQuery}
+                                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                                />
+                                            </div>
+                                            
+                                            <div className="admin-users-list">
+                                                {adminUsers
+                                                    .filter(u => u.character_name.toLowerCase().includes(searchQuery.toLowerCase()) || u.static_id.includes(searchQuery))
+                                                    .map(u => (
+                                                        <div 
+                                                            key={u.id} 
+                                                            className={`admin-user-card ${selectedAdminUser?.id === u.id ? 'active' : ''}`}
+                                                            onClick={() => selectAdminUser(u)}
+                                                        >
+                                                            <div className="admin-user-left">
+                                                                <div className="admin-user-avatar">
+                                                                    <img src={u.discord?.avatar || getProceduralAvatar(u.character_name)} alt="Av" />
+                                                                </div>
+                                                                <div className="admin-user-info">
+                                                                    <span className="admin-user-name">{u.character_name}</span>
+                                                                    <span className="admin-user-static">CID: {u.static_id}</span>
+                                                                </div>
+                                                            </div>
+                                                            <span className={`admin-user-role-badge ${u.role.toLowerCase()}`}>
+                                                                {u.role}
+                                                            </span>
+                                                        </div>
+                                                    ))
+                                                }
+                                            </div>
+                                        </div>
+
+                                        {/* User stats edit and Warnings Dossier */}
+                                        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                                            {selectedAdminUser ? (
+                                                <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                                                    {/* Profile Header */}
+                                                    <div className="admin-details-header">
+                                                        <div className="details-avatar-huge">
+                                                            <img src={selectedAdminUser.discord?.avatar || getProceduralAvatar(selectedAdminUser.character_name)} alt="Av" />
+                                                        </div>
+                                                        <div className="details-info-wrap">
+                                                            <span className="details-name">{selectedAdminUser.character_name}</span>
+                                                            <span className="details-static">CID персонажа: {selectedAdminUser.static_id}</span>
+                                                        </div>
+                                                    </div>
+
+                                                    <form onSubmit={handleAdminSaveUser} className="admin-details-form" style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                                        <div className="form-group">
+                                                            <label>Уровень прав (Семейная Роль)</label>
+                                                            <select 
+                                                                className="input-glow" 
+                                                                value={editRole}
+                                                                onChange={(e) => setEditRole(e.target.value)}
+                                                                style={{ cursor: 'pointer' }}
+                                                            >
+                                                                <option value="MEMBER">MEMBER (Рядовой)</option>
+                                                                <option value="MODERATOR">MODERATOR (Старший состав)</option>
+                                                                <option value="Developer">Developer (Тех-админ)</option>
+                                                                <option value="OWNER">OWNER (Глава семьи)</option>
+                                                            </select>
+                                                        </div>
+
+                                                        <div className="form-group">
+                                                            <label>Количество выговоров ({editWarns} / 3)</label>
+                                                            <input 
+                                                                type="number" 
+                                                                className="input-glow"
+                                                                min="0" 
+                                                                max="3"
+                                                                value={editWarns} 
+                                                                onChange={(e) => setEditWarns(e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div className="form-group">
+                                                            <label>Личный сейф ($)</label>
+                                                            <input 
+                                                                type="number" 
+                                                                className="input-glow" 
+                                                                value={editBalance} 
+                                                                onChange={(e) => setEditBalance(e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                            <button type="submit" className="btn-primary" disabled={loading}>
+                                                                {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Сохранить изменения'}
+                                                            </button>
+                                                            <button 
+                                                                type="button" 
+                                                                className="btn-secondary" 
+                                                                style={{ border: '1px solid var(--danger)', color: 'var(--danger)' }}
+                                                                onClick={() => handleAdminDeleteUser(selectedAdminUser.id)}
+                                                                disabled={loading}
+                                                            >
+                                                                <i className="fa-solid fa-trash-can" style={{ marginRight: '8px' }}></i>
+                                                                Исключить / Удалить аккаунт
+                                                            </button>
+                                                        </div>
+                                                    </form>
+
+                                                    <hr style={{ borderColor: 'rgba(255,255,255,0.05)', margin: '10px 0' }} />
+
+                                                    {/* Tactical Warning Dossier Module */}
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                                        <h3 style={{ fontSize: '1.05rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                            <i className="fa-solid fa-gavel"></i>
+                                                            Дисциплинарное досье
+                                                        </h3>
+
+                                                        {/* Issue warning form */}
+                                                        <form onSubmit={handleIssueWarn} style={{ background: 'rgba(0,0,0,0.15)', padding: '15px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.03)' }}>
+                                                            <div className="form-group">
+                                                                <label style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Выдать новое взыскание (Выговор)</label>
+                                                                <input 
+                                                                    type="text" 
+                                                                    className="input-glow" 
+                                                                    placeholder="Причина выговора, например: НУС / Прогул строя" 
+                                                                    value={warnReason}
+                                                                    onChange={(e) => setWarnReason(e.target.value)}
+                                                                    required
+                                                                />
+                                                            </div>
+                                                            <button type="submit" className="btn-primary" style={{ width: '100%', padding: '6px', fontSize: '0.8rem', marginTop: '5px' }} disabled={loading}>
+                                                                {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Записать взыскание'}
+                                                            </button>
+                                                        </form>
+
+                                                        {/* Selected User Warnings List */}
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                            <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>История взысканий бойца</label>
+                                                            {selectedUserWarns.length === 0 ? (
+                                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', padding: '10px' }}>
+                                                                    Чистое личное дело
+                                                                </div>
+                                                            ) : (
+                                                                selectedUserWarns.map((w) => (
+                                                                    <div key={w.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255, 255, 255, 0.02)', padding: '10px', borderRadius: '6px', borderLeft: `3px solid ${w.status === 'ACTIVE' ? 'var(--danger)' : 'var(--text-muted)'}`, fontSize: '0.82rem' }}>
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                                                            <span style={{ fontWeight: '600', color: w.status === 'ACTIVE' ? 'var(--text-bright)' : 'var(--text-muted)' }}>
+                                                                                {w.reason}
+                                                                            </span>
+                                                                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                                                                                Выдал: {w.issued_by} | {formatDate(w.issued_at)}
+                                                                            </span>
+                                                                            <span style={{ fontSize: '0.7rem', color: w.status === 'ACTIVE' ? 'var(--danger)' : 'var(--text-muted)', fontWeight: 'bold' }}>
+                                                                                {w.status === 'ACTIVE' ? 'АКТИВЕН' : 'СНЯТ / ИСТЕК'}
+                                                                            </span>
+                                                                        </div>
+                                                                        {w.status === 'ACTIVE' && (
+                                                                            <button 
+                                                                                type="button" 
+                                                                                className="btn-secondary" 
+                                                                                style={{ padding: '4px 8px', fontSize: '0.72rem', border: '1px solid var(--primary)', color: 'var(--primary)' }}
+                                                                                onClick={() => handleLiftWarn(w.id, w.reason)}
+                                                                                disabled={loading}
+                                                                            >
+                                                                                Снять
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="empty-state" style={{ height: '300px' }}>
+                                                    <i className="fa-solid fa-user-gear"></i>
+                                                    <p>Выберите персонажа из списка для администрирования</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* TAB 2: TREASURY REQUESTS MANAGER */}
+                                {adminSubTab === 'treasury' && (
+                                    <div className="glass-panel animate-fade-in" style={{ padding: '2rem' }}>
+                                        <h3 style={{ marginBottom: '1.2rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <i className="fa-solid fa-vault" style={{ color: 'var(--primary)' }}></i>
+                                            Управление заявками в Казну
+                                        </h3>
+                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '2rem' }}>
+                                            Здесь отображаются все поданные членами семьи запросы на пополнение и вывод средств. Рассмотрите их, укажите вердикт и подтвердите перевод.
+                                        </p>
+
+                                        {/* Admin Treasury request review form / input comment */}
+                                        <div className="form-group" style={{ marginBottom: '2rem', maxWidth: '500px' }}>
+                                            <label style={{ fontSize: '0.85rem' }}>Общий комментарий к вердикту (необязательно)</label>
                                             <input 
                                                 type="text" 
-                                                className="input-glow search-input" 
-                                                placeholder="Поиск по имени / CID..."
-                                                value={searchQuery}
-                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                className="input-glow" 
+                                                placeholder="Причина одобрения / отказа, например: Отчет принят / Недостаточно доказательств взноса"
+                                                value={adminTreasuryComment}
+                                                onChange={(e) => setAdminTreasuryComment(e.target.value)}
                                             />
                                         </div>
-                                        
-                                        <div className="admin-users-list">
-                                            {adminUsers
-                                                .filter(u => u.character_name.toLowerCase().includes(searchQuery.toLowerCase()) || u.static_id.includes(searchQuery))
-                                                .map(u => (
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                            {treasuryRequests.length === 0 ? (
+                                                <div className="empty-state" style={{ padding: '3rem 1rem' }}>
+                                                    <i className="fa-solid fa-circle-check" style={{ color: 'var(--primary)' }}></i>
+                                                    <p>Все заявки в казну обработаны!</p>
+                                                </div>
+                                            ) : (
+                                                treasuryRequests.map((req) => (
                                                     <div 
-                                                        key={u.id} 
-                                                        className={`admin-user-card ${selectedAdminUser?.id === u.id ? 'active' : ''}`}
-                                                        onClick={() => selectAdminUser(u)}
+                                                        key={req.id} 
+                                                        style={{ 
+                                                            display: 'flex', 
+                                                            flexDirection: 'column', 
+                                                            gap: '12px', 
+                                                            padding: '20px', 
+                                                            borderRadius: '12px', 
+                                                            background: 'rgba(255,255,255,0.02)', 
+                                                            border: '1px solid rgba(255,255,255,0.05)',
+                                                            borderLeft: `4px solid ${req.status === 'PENDING' ? 'var(--primary)' : req.status === 'APPROVED' ? '#52c41a' : '#ff4d4f'}`
+                                                        }}
                                                     >
-                                                        <div className="admin-user-left">
-                                                            <div className="admin-user-avatar">
-                                                                <img src={u.discord?.avatar || getProceduralAvatar(u.character_name)} alt="Av" />
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                <span style={{ fontSize: '1.05rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                                    <i className={`fa-solid ${req.type === 'DEPOSIT' ? 'fa-arrow-down' : 'fa-arrow-up'}`} style={{ color: req.type === 'DEPOSIT' ? 'var(--primary)' : 'var(--danger)' }}></i>
+                                                                    {req.type === 'DEPOSIT' ? 'ВЗНОС' : 'ВЫДАЧА'}
+                                                                </span>
+                                                                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>от {req.character_name} (CID: {req.static_id})</span>
                                                             </div>
-                                                            <div className="admin-user-info">
-                                                                <span className="admin-user-name">{u.character_name}</span>
-                                                                <span className="admin-user-static">CID: {u.static_id}</span>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                <span style={{ fontSize: '1.15rem', fontWeight: 'bold', color: 'var(--text-bright)' }}>{formatCurrency(req.amount)}</span>
+                                                                <span className={`status-badge ${req.status.toLowerCase()}`} style={{ fontSize: '0.72rem', padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                                                                    {req.status === 'PENDING' ? 'Ожидает' : req.status === 'APPROVED' ? 'Одобрен' : 'Отклонен'}
+                                                                </span>
                                                             </div>
                                                         </div>
-                                                        <span className={`admin-user-role-badge ${u.role.toLowerCase()}`}>
-                                                            {u.role}
-                                                        </span>
+
+                                                        {req.description && (
+                                                            <div style={{ fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '6px', borderLeft: '3px solid var(--primary)', color: 'var(--text-bright)' }}>
+                                                                <strong>Обоснование:</strong> {req.description}
+                                                            </div>
+                                                        )}
+
+                                                        {req.admin_comment && (
+                                                            <div style={{ fontSize: '0.82rem', padding: '4px 0', color: 'var(--primary)', fontStyle: 'italic' }}>
+                                                                <strong>Админ-комментарий:</strong> {req.admin_comment}
+                                                            </div>
+                                                        )}
+
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginTop: '5px' }}>
+                                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Подан: {formatDate(req.created_at)}</span>
+                                                            {req.status === 'PENDING' && (
+                                                                <div style={{ display: 'flex', gap: '10px' }}>
+                                                                    <button 
+                                                                        type="button" 
+                                                                        className="btn-primary" 
+                                                                        style={{ padding: '6px 16px', fontSize: '0.8rem', background: '#52c41a', borderColor: '#52c41a', color: '#fff' }}
+                                                                        onClick={() => handleApproveTreasuryRequest(req.id)}
+                                                                        disabled={loading}
+                                                                    >
+                                                                        Одобрить
+                                                                    </button>
+                                                                    <button 
+                                                                        type="button" 
+                                                                        className="btn-secondary" 
+                                                                        style={{ padding: '6px 16px', fontSize: '0.8rem', border: '1px solid #ff4d4f', color: '#ff4d4f' }}
+                                                                        onClick={() => handleRejectTreasuryRequest(req.id)}
+                                                                        disabled={loading}
+                                                                    >
+                                                                        Отклонить
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 ))
-                                            }
+                                            )}
                                         </div>
                                     </div>
+                                )}
 
-                                    <div className="glass-panel">
-                                        {selectedAdminUser ? (
-                                            <form onSubmit={handleAdminSaveUser} className="admin-details-form animate-fade-in">
-                                                <div className="admin-details-header">
-                                                    <div className="details-avatar-huge">
-                                                        <img src={selectedAdminUser.discord?.avatar || getProceduralAvatar(selectedAdminUser.character_name)} alt="Av" />
-                                                    </div>
-                                                    <div className="details-info-wrap">
-                                                        <span className="details-name">{selectedAdminUser.character_name}</span>
-                                                        <span className="details-static">CID персонажа: {selectedAdminUser.static_id}</span>
-                                                    </div>
+                                {/* TAB 3: FEEDBACK RESOLUTION BOARD */}
+                                {adminSubTab === 'feedback' && (
+                                    <div className="glass-panel animate-fade-in" style={{ padding: '2rem' }}>
+                                        <h3 style={{ marginBottom: '1.2rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <i className="fa-solid fa-comments" style={{ color: 'var(--primary)' }}></i>
+                                            Обращения & Обратная связь
+                                        </h3>
+                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '2rem' }}>
+                                            Рассмотрите жалобы и предложения участников синдиката, напишите развернутый ответ и закройте обращение.
+                                        </p>
+
+                                        {/* Global reply input comment */}
+                                        <div className="form-group" style={{ marginBottom: '2rem', maxWidth: '500px' }}>
+                                            <label style={{ fontSize: '0.85rem' }}>Ответ на обращение (вердикт)</label>
+                                            <textarea 
+                                                className="input-glow textarea-prompt" 
+                                                placeholder="Введите ответ / вердикт на обращение бойца..."
+                                                value={adminReplyText}
+                                                onChange={(e) => setAdminReplyText(e.target.value)}
+                                                style={{ height: '70px' }}
+                                            ></textarea>
+                                        </div>
+
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                            {allFeedbacks.length === 0 ? (
+                                                <div className="empty-state" style={{ padding: '3rem 1rem' }}>
+                                                    <i className="fa-solid fa-circle-check" style={{ color: 'var(--primary)' }}></i>
+                                                    <p>Обращения отсутствуют!</p>
                                                 </div>
-
-                                                <div className="form-group">
-                                                    <label>Уровень прав (Семейная Роль)</label>
-                                                    <select 
-                                                        className="input-glow" 
-                                                        value={editRole}
-                                                        onChange={(e) => setEditRole(e.target.value)}
-                                                        style={{ cursor: 'pointer' }}
+                                            ) : (
+                                                allFeedbacks.map((fb) => (
+                                                    <div 
+                                                        key={fb.id} 
+                                                        style={{ 
+                                                            display: 'flex', 
+                                                            flexDirection: 'column', 
+                                                            gap: '12px', 
+                                                            padding: '20px', 
+                                                            borderRadius: '12px', 
+                                                            background: 'rgba(255,255,255,0.02)', 
+                                                            border: '1px solid rgba(255,255,255,0.05)',
+                                                            borderLeft: `4px solid ${fb.status === 'PENDING' ? 'var(--primary)' : fb.status === 'APPROVED' ? '#52c41a' : '#ff4d4f'}`
+                                                        }}
                                                     >
-                                                        <option value="MEMBER">MEMBER (Рядовой)</option>
-                                                        <option value="MODERATOR">MODERATOR (Старший состав)</option>
-                                                        <option value="Developer">Developer (Тех-админ)</option>
-                                                        <option value="OWNER">OWNER (Глава семьи)</option>
-                                                    </select>
-                                                </div>
+                                                        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                                <span style={{ fontSize: '1rem', fontWeight: 'bold', color: fb.type === 'COMPLAINT' ? 'var(--danger)' : '#1890ff' }}>
+                                                                    <i className={`fa-solid ${fb.type === 'COMPLAINT' ? 'fa-triangle-exclamation' : 'fa-lightbulb'}`} style={{ marginRight: '6px' }}></i>
+                                                                    {fb.type === 'COMPLAINT' ? 'ЖАЛОБА' : 'ПРЕДЛОЖЕНИЕ'}
+                                                                </span>
+                                                                {fb.target_member && (
+                                                                    <span style={{ fontSize: '0.8rem', color: 'var(--danger)' }}>
+                                                                        (на {fb.target_member})
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <span className={`status-badge ${fb.status.toLowerCase()}`} style={{ fontSize: '0.72rem', padding: '4px 8px', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                                                                {fb.status === 'PENDING' ? 'Ожидает' : fb.status === 'APPROVED' ? 'Одобрено / Закрыто' : 'Отклонено'}
+                                                            </span>
+                                                        </div>
 
-                                                <div className="form-group">
-                                                    <label>Количество выговоров ({editWarns} / 3)</label>
-                                                    <input 
-                                                        type="number" 
-                                                        className="input-glow"
-                                                        min="0" 
-                                                        max="3"
-                                                        value={editWarns} 
-                                                        onChange={(e) => setEditWarns(e.target.value)}
-                                                    />
-                                                </div>
+                                                        <div style={{ fontSize: '0.88rem', background: 'rgba(0,0,0,0.15)', padding: '12px', borderRadius: '6px', color: 'var(--text-bright)', lineHeight: '1.5' }}>
+                                                            {fb.text}
+                                                        </div>
 
-                                                <div className="form-group">
-                                                    <label>Личный сейф ($)</label>
-                                                    <input 
-                                                        type="number" 
-                                                        className="input-glow" 
-                                                        value={editBalance} 
-                                                        onChange={(e) => setEditBalance(e.target.value)}
-                                                    />
-                                                </div>
+                                                        {fb.admin_comment && (
+                                                            <div style={{ fontSize: '0.82rem', padding: '10px', borderRadius: '6px', background: 'rgba(212,175,55,0.03)', border: '1px solid rgba(212,175,55,0.08)', color: 'var(--primary)', fontStyle: 'italic' }}>
+                                                                <strong>Ответ администрации:</strong> {fb.admin_comment}
+                                                            </div>
+                                                        )}
 
-                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                                    <button type="submit" className="btn-primary" disabled={loading}>
-                                                        {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Сохранить изменения'}
-                                                    </button>
-                                                    <button 
-                                                        type="button" 
-                                                        className="btn-secondary" 
-                                                        style={{ border: '1px solid var(--danger)', color: 'var(--danger)' }}
-                                                        onClick={() => handleAdminDeleteUser(selectedAdminUser.id)}
-                                                        disabled={loading}
-                                                    >
-                                                        <i className="fa-solid fa-trash-can" style={{ marginRight: '8px' }}></i>
-                                                        Исключить / Удалить аккаунт
-                                                    </button>
-                                                </div>
-                                            </form>
-                                        ) : (
-                                            <div className="empty-state" style={{ height: '300px' }}>
-                                                <i className="fa-solid fa-user-gear"></i>
-                                                <p>Выберите персонажа из списка для администрирования</p>
-                                            </div>
-                                        )}
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginTop: '5px' }}>
+                                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Автор ID: {fb.user_id} | {formatDate(fb.created_at)}</span>
+                                                            {fb.status === 'PENDING' && (
+                                                                <div style={{ display: 'flex', gap: '10px' }}>
+                                                                    <button 
+                                                                        type="button" 
+                                                                        className="btn-primary" 
+                                                                        style={{ padding: '6px 16px', fontSize: '0.8rem', background: '#52c41a', borderColor: '#52c41a', color: '#fff' }}
+                                                                        onClick={() => handleReplyFeedback(fb.id, adminReplyText, 'APPROVED')}
+                                                                        disabled={loading}
+                                                                    >
+                                                                        Принять & Закрыть
+                                                                    </button>
+                                                                    <button 
+                                                                        type="button" 
+                                                                        className="btn-secondary" 
+                                                                        style={{ padding: '6px 16px', fontSize: '0.8rem', border: '1px solid #ff4d4f', color: '#ff4d4f' }}
+                                                                        onClick={() => handleReplyFeedback(fb.id, adminReplyText, 'REJECTED')}
+                                                                        disabled={loading}
+                                                                    >
+                                                                        Отклонить
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
+
+                                {/* TAB 4: SYSTEM PROMPT (VOLODYA RAZUM) */}
+                                {adminSubTab === 'volodya' && (
+                                    <div className="glass-panel glow-purple animate-fade-in" style={{ padding: '2rem' }}>
+                                        <h3 style={{ marginBottom: '1rem' }}><i className="fa-solid fa-brain" style={{ marginRight: '10px', color: 'var(--primary)' }}></i>Прошивка Разума ИИ Володи (Промпт)</h3>
+                                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.2rem' }}>
+                                            Доступно только ролям **OWNER** и **Developer**. Изменение этого промпта мгновенно перепрограммирует ИИ Володю на сервере!
+                                        </p>
+                                        <form onSubmit={handleAdminSavePrompt}>
+                                            <textarea 
+                                                className="input-glow textarea-prompt" 
+                                                value={systemPrompt} 
+                                                onChange={(e) => setSystemPrompt(e.target.value)}
+                                                placeholder="Введите кастомный системный промпт для Gemini ИИ..."
+                                                style={{ height: '200px' }}
+                                            ></textarea>
+                                            <button type="submit" className="btn-primary" style={{ marginTop: '1.2rem' }} disabled={loading}>
+                                                {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Записать в чип Володе'}
+                                            </button>
+                                        </form>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -1921,31 +2611,56 @@ export default function Home() {
 
             {/* DYNAMIC MODALS FOR BALANCE ACTIONS */}
             
-            {/* Deposit Modal */}
-            <div className={`modal-overlay ${showDepositModal ? 'active' : ''}`}>
-                <div className="modal-content">
-                    <div className="modal-header">
-                        <h3 className="modal-title">Вложение в казну</h3>
-                        <button className="modal-close" onClick={() => setShowDepositModal(false)}>
+            {/* Treasury Request Modal */}
+            <div className={`modal-overlay ${showTreasuryRequestModal ? 'active' : ''}`}>
+                <div className="modal-content glass-panel glow-purple" style={{ border: '1px solid var(--primary)', maxWidth: '460px', padding: '2.5rem' }}>
+                    <div className="modal-header" style={{ marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px' }}>
+                        <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.25rem' }}>
+                            <i className="fa-solid fa-vault" style={{ color: 'var(--primary)' }}></i>
+                            Заявка в семейную казну
+                        </h3>
+                        <button className="modal-close" onClick={() => setShowTreasuryRequestModal(false)} style={{ background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>
                             <i className="fa-solid fa-xmark"></i>
                         </button>
                     </div>
-                    <form onSubmit={handleDepositSubmit}>
+                    <form onSubmit={handleTreasuryRequestSubmit}>
                         <div className="form-group">
-                            <label>Сумма вклада ($)</label>
+                            <label>Тип транзакции</label>
+                            <select 
+                                className="input-glow" 
+                                value={reqType} 
+                                onChange={(e) => setReqType(e.target.value)}
+                                style={{ cursor: 'pointer' }}
+                            >
+                                <option value="DEPOSIT">ВЗНОС (Вложить в казну)</option>
+                                <option value="WITHDRAW">ВЫДАЧА (Вывести из казны)</option>
+                            </select>
+                        </div>
+                        <div className="form-group">
+                            <label>Сумма ($)</label>
                             <input 
                                 type="number" 
                                 className="input-glow" 
                                 placeholder="50000"
-                                value={depositAmount}
-                                onChange={(e) => setDepositAmount(e.target.value)}
+                                value={reqAmount}
+                                onChange={(e) => setReqAmount(e.target.value)}
                                 required
                                 min="1"
                             />
-                            <small className="help-text">Деньги спишутся с вашего счета и поступят в семейную казну</small>
+                        </div>
+                        <div className="form-group">
+                            <label>Обоснование / Описание заявки</label>
+                            <textarea 
+                                className="input-glow textarea-prompt" 
+                                placeholder="Опишите за что взнос / на какие цели выдача (например, доля со сбора / закупка бронежилетов)"
+                                value={reqDescription}
+                                onChange={(e) => setReqDescription(e.target.value)}
+                                required
+                                style={{ height: '80px' }}
+                            ></textarea>
                         </div>
                         <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '1rem' }} disabled={loading}>
-                            {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Вложить'}
+                            {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Отправить заявку'}
                         </button>
                     </form>
                 </div>
@@ -1993,29 +2708,50 @@ export default function Home() {
 
             {/* Custom Avatar Change Modal */}
             <div className={`modal-overlay ${showAvatarModal ? 'active' : ''}`}>
-                <div className="modal-content">
-                    <div className="modal-header">
-                        <h3 className="modal-title">Сменить Аватарку</h3>
-                        <button className="modal-close" onClick={() => setShowAvatarModal(false)}>
+                <div className="modal-content glass-panel glow-purple" style={{ border: '2.5px solid var(--primary)', maxWidth: '460px', padding: '2.5rem' }}>
+                    <div className="modal-header" style={{ marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px' }}>
+                        <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.25rem' }}>
+                            <i className="fa-solid fa-image" style={{ color: 'var(--primary)' }}></i>
+                            Сменить Аватарку
+                        </h3>
+                        <button className="modal-close" onClick={() => setShowAvatarModal(false)} style={{ background: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>
                             <i className="fa-solid fa-xmark"></i>
                         </button>
                     </div>
+                    
                     <form onSubmit={handleAvatarUpdate}>
+                        {/* PC File Upload wrapper */}
                         <div className="form-group">
-                            <label>Ссылка на картинку или ключевое слово</label>
+                            <label>Загрузить файл с компьютера</label>
+                            <div className="file-upload-glow-wrap">
+                                <i className="fa-solid fa-cloud-arrow-up file-upload-icon animate-pulse"></i>
+                                <span style={{ fontSize: '0.8rem', fontWeight: '600' }}>Перетащите фото сюда или нажмите</span>
+                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Поддерживаются PNG, JPG, GIF (макс. 2МБ)</span>
+                                <input 
+                                    type="file" 
+                                    accept="image/*" 
+                                    onChange={handleFileChange} 
+                                />
+                            </div>
+                        </div>
+
+                        <div className="divider" style={{ margin: '1.5rem 0' }}><span>ИЛИ</span></div>
+
+                        <div className="form-group">
+                            <label>Вставить ссылку или Ключ Dicebear</label>
                             <input 
                                 type="text" 
                                 className="input-glow" 
                                 placeholder="https://i.imgur.com/xxxxx.png или seed_слово"
-                                value={customAvatarUrl}
+                                value={customAvatarUrl.startsWith('data:image') ? '[Локальное изображение с ПК]' : customAvatarUrl}
                                 onChange={(e) => setCustomAvatarUrl(e.target.value)}
-                                required
                             />
                             <small className="help-text">
-                                Вставьте прямую ссылку на PNG/JPG или любое слово для перегенерации пиксельного аватара Dicebear!
+                                Вставьте ссылку на картинку или seed-слово для генерации пиксельного персонажа!
                             </small>
                         </div>
-                        <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '1rem' }} disabled={loading}>
+                        
+                        <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '1.5rem' }} disabled={loading}>
                             {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Сохранить Аватарку'}
                         </button>
                     </form>

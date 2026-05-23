@@ -109,6 +109,34 @@ export async function GET(request) {
             }
         }
         
+        else if (action === 'getTreasuryRequests') {
+            if (supabase) {
+                const { data, error } = await supabase.from('treasury_requests').select('*').order('created_at', { ascending: false });
+                if (error) {
+                    // Fail gracefully if table does not exist
+                    return NextResponse.json([]);
+                }
+                return NextResponse.json(data);
+            } else {
+                const db = getDemoDb();
+                if (!db.treasury_requests) db.treasury_requests = [];
+                const list = db.treasury_requests.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+                return NextResponse.json(list);
+            }
+        }
+        
+        else if (action === 'getAllFeedback') {
+            if (supabase) {
+                const { data, error } = await supabase.from('feedback').select('*').order('created_at', { ascending: false });
+                if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+                return NextResponse.json(data);
+            } else {
+                const db = getDemoDb();
+                const list = db.feedback.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
+                return NextResponse.json(list);
+            }
+        }
+        
         return NextResponse.json({ error: "Invalid GET Action" }, { status: 400 });
     } catch (e) {
         return NextResponse.json({ error: e.message }, { status: 500 });
@@ -375,23 +403,291 @@ export async function POST(request) {
             }
         }
         
-        else if (action === 'deleteSelfAccount') {
-            const { userId } = body;
-            if (!userId) return NextResponse.json({ error: "ID пользователя не указан" }, { status: 400 });
+        else if (action === 'submitTreasuryRequest') {
+            const { userId, type: reqType, amount: reqAmt, description } = body;
+            if (reqAmt <= 0) return NextResponse.json({ error: "Сумма должна быть больше нуля!" }, { status: 400 });
             
             if (supabase) {
-                const { error } = await supabase.from('profiles').delete().eq('id', userId);
-                if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+                const { data: user } = await supabase.from('profiles').select('character_name, static_id').eq('id', userId).maybeSingle();
+                const charName = user?.character_name || 'Неизвестно';
+                const staticId = user?.static_id || '0';
+                
+                const { error } = await supabase.from('treasury_requests').insert({
+                    user_id: userId,
+                    character_name: charName,
+                    static_id: staticId,
+                    type: reqType,
+                    amount: reqAmt,
+                    description: description || '',
+                    status: 'PENDING',
+                    created_at: new Date().toISOString()
+                });
+                if (error) {
+                    return NextResponse.json({ error: error.message }, { status: 500 });
+                }
                 return NextResponse.json({ success: true });
             } else {
                 const db = getDemoDb();
-                const idx = db.users.findIndex(u => u.id === userId);
-                if (idx === -1) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+                const user = db.users.find(u => u.id === userId);
+                if (!user) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
                 
-                db.users.splice(idx, 1);
-                db.warns = db.warns.filter(w => w.user_id !== userId);
-                db.feedback = db.feedback.filter(f => f.user_id !== userId);
-                db.transactions = db.transactions.filter(t => t.user_id !== userId);
+                if (!db.treasury_requests) db.treasury_requests = [];
+                db.treasury_requests.push({
+                    id: 'tr-' + Math.random().toString(36).substr(2, 9),
+                    user_id: userId,
+                    character_name: user.character_name,
+                    static_id: user.static_id,
+                    type: reqType,
+                    amount: reqAmt,
+                    description: description || '',
+                    status: 'PENDING',
+                    admin_comment: '',
+                    created_at: new Date().toISOString()
+                });
+                saveDemoDb(db);
+                return NextResponse.json({ success: true });
+            }
+        }
+        
+        else if (action === 'approveTreasuryRequest') {
+            const { requestId, adminComment } = body;
+            
+            if (supabase) {
+                const { data: adminUser } = await supabase.from('profiles').select('role').eq('id', adminUserId).maybeSingle();
+                if (!adminUser || !['OWNER', 'Developer', 'MODERATOR'].includes(adminUser.role)) {
+                    return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
+                }
+                
+                const { data: req, error: rErr } = await supabase.from('treasury_requests').select('*').eq('id', requestId).maybeSingle();
+                if (rErr || !req) return NextResponse.json({ error: "Запрос не найден" }, { status: 404 });
+                if (req.status !== 'PENDING') return NextResponse.json({ error: "Запрос уже обработан" }, { status: 400 });
+                
+                const { data: user } = await supabase.from('profiles').select('balance').eq('id', req.user_id).maybeSingle();
+                if (!user) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+                
+                let newBal = parseFloat(user.balance);
+                if (req.type === 'DEPOSIT') {
+                    newBal += parseFloat(req.amount);
+                } else {
+                    if (newBal < parseFloat(req.amount)) {
+                        return NextResponse.json({ error: "Недостаточно средств на балансе пользователя!" }, { status: 400 });
+                    }
+                    newBal -= parseFloat(req.amount);
+                }
+                
+                await supabase.from('profiles').update({ balance: newBal }).eq('id', req.user_id);
+                await supabase.from('transactions').insert({
+                    user_id: req.user_id,
+                    type: req.type,
+                    amount: req.type === 'DEPOSIT' ? req.amount : -req.amount,
+                    description: `${req.type === 'DEPOSIT' ? 'Взнос' : 'Вывод'} одобрен админом: ${req.description}`
+                });
+                await supabase.from('treasury_requests').update({
+                    status: 'APPROVED',
+                    admin_comment: adminComment || 'Одобрено администратором'
+                }).eq('id', requestId);
+                
+                return NextResponse.json({ success: true });
+            } else {
+                const db = getDemoDb();
+                const adminUser = db.users.find(u => u.id === adminUserId);
+                if (!adminUser || !['OWNER', 'Developer', 'MODERATOR'].includes(adminUser.role)) {
+                    return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
+                }
+                
+                if (!db.treasury_requests) db.treasury_requests = [];
+                const reqIdx = db.treasury_requests.findIndex(r => r.id === requestId);
+                if (reqIdx === -1) return NextResponse.json({ error: "Запрос не найден" }, { status: 404 });
+                
+                const req = db.treasury_requests[reqIdx];
+                if (req.status !== 'PENDING') return NextResponse.json({ error: "Запрос уже обработан" }, { status: 400 });
+                
+                const userIdx = db.users.findIndex(u => u.id === req.user_id);
+                if (userIdx === -1) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+                
+                let newBal = parseFloat(db.users[userIdx].balance);
+                if (req.type === 'DEPOSIT') {
+                    newBal += parseFloat(req.amount);
+                } else {
+                    if (newBal < parseFloat(req.amount)) {
+                        return NextResponse.json({ error: "Недостаточно средств у пользователя в сейфе!" }, { status: 400 });
+                    }
+                    newBal -= parseFloat(req.amount);
+                }
+                
+                db.users[userIdx].balance = newBal;
+                db.treasury_requests[reqIdx].status = 'APPROVED';
+                db.treasury_requests[reqIdx].admin_comment = adminComment || 'Одобрено';
+                
+                db.transactions.push({
+                    id: 'tx-' + Math.random().toString(36).substr(2, 9),
+                    user_id: req.user_id,
+                    type: req.type,
+                    amount: req.type === 'DEPOSIT' ? req.amount : -req.amount,
+                    description: `${req.type === 'DEPOSIT' ? 'Взнос' : 'Вывод'} одобрен админом: ${req.description || 'без комментария'}`,
+                    created_at: new Date().toISOString()
+                });
+                
+                saveDemoDb(db);
+                return NextResponse.json({ success: true });
+            }
+        }
+        
+        else if (action === 'rejectTreasuryRequest') {
+            const { requestId, adminComment } = body;
+            
+            if (supabase) {
+                const { data: adminUser } = await supabase.from('profiles').select('role').eq('id', adminUserId).maybeSingle();
+                if (!adminUser || !['OWNER', 'Developer', 'MODERATOR'].includes(adminUser.role)) {
+                    return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
+                }
+                
+                await supabase.from('treasury_requests').update({
+                    status: 'REJECTED',
+                    admin_comment: adminComment || 'Отклонено администратором'
+                }).eq('id', requestId);
+                
+                return NextResponse.json({ success: true });
+            } else {
+                const db = getDemoDb();
+                const adminUser = db.users.find(u => u.id === adminUserId);
+                if (!adminUser || !['OWNER', 'Developer', 'MODERATOR'].includes(adminUser.role)) {
+                    return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
+                }
+                
+                if (!db.treasury_requests) db.treasury_requests = [];
+                const reqIdx = db.treasury_requests.findIndex(r => r.id === requestId);
+                if (reqIdx === -1) return NextResponse.json({ error: "Запрос не найден" }, { status: 404 });
+                
+                db.treasury_requests[reqIdx].status = 'REJECTED';
+                db.treasury_requests[reqIdx].admin_comment = adminComment || 'Отклонено';
+                
+                saveDemoDb(db);
+                return NextResponse.json({ success: true });
+            }
+        }
+        
+        else if (action === 'addWarn') {
+            const { targetUserId, reason } = body;
+            if (!reason) return NextResponse.json({ error: "Укажите причину взыскания!" }, { status: 400 });
+            
+            if (supabase) {
+                const { data: adminUser } = await supabase.from('profiles').select('role, character_name').eq('id', adminUserId).maybeSingle();
+                if (!adminUser || !['OWNER', 'Developer', 'MODERATOR'].includes(adminUser.role)) {
+                    return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
+                }
+                
+                const { error: wErr } = await supabase.from('warns').insert({
+                    user_id: targetUserId,
+                    reason,
+                    issued_by: adminUser.character_name,
+                    status: 'ACTIVE',
+                    issued_at: new Date().toISOString()
+                });
+                if (wErr) return NextResponse.json({ error: wErr.message }, { status: 500 });
+                
+                const { data: warnsList } = await supabase.from('warns').select('*').eq('user_id', targetUserId).eq('status', 'ACTIVE');
+                const count = warnsList ? warnsList.length : 1;
+                await supabase.from('profiles').update({ warns_count: count }).eq('id', targetUserId);
+                
+                return NextResponse.json({ success: true });
+            } else {
+                const db = getDemoDb();
+                const adminUser = db.users.find(u => u.id === adminUserId);
+                if (!adminUser || !['OWNER', 'Developer', 'MODERATOR'].includes(adminUser.role)) {
+                    return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
+                }
+                
+                db.warns.push({
+                    id: 'warn-' + Math.random().toString(36).substr(2, 9),
+                    user_id: targetUserId,
+                    reason,
+                    issued_by: adminUser.character_name,
+                    issued_at: new Date().toISOString(),
+                    status: 'ACTIVE'
+                });
+                
+                const count = db.warns.filter(w => w.user_id === targetUserId && w.status === 'ACTIVE').length;
+                const idx = db.users.findIndex(u => u.id === targetUserId);
+                if (idx !== -1) {
+                    db.users[idx].warns_count = count;
+                }
+                
+                saveDemoDb(db);
+                return NextResponse.json({ success: true });
+            }
+        }
+        
+        else if (action === 'liftWarn') {
+            const { warnId } = body;
+            
+            if (supabase) {
+                const { data: adminUser } = await supabase.from('profiles').select('role').eq('id', adminUserId).maybeSingle();
+                if (!adminUser || !['OWNER', 'Developer', 'MODERATOR'].includes(adminUser.role)) {
+                    return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
+                }
+                
+                const { data: warn } = await supabase.from('warns').select('user_id').eq('id', warnId).maybeSingle();
+                if (!warn) return NextResponse.json({ error: "Выговор не найден" }, { status: 404 });
+                
+                await supabase.from('warns').update({ status: 'EXPIRED' }).eq('id', warnId);
+                
+                const { data: warnsList } = await supabase.from('warns').select('*').eq('user_id', warn.user_id).eq('status', 'ACTIVE');
+                const count = warnsList ? warnsList.length : 0;
+                await supabase.from('profiles').update({ warns_count: count }).eq('id', warn.user_id);
+                
+                return NextResponse.json({ success: true });
+            } else {
+                const db = getDemoDb();
+                const adminUser = db.users.find(u => u.id === adminUserId);
+                if (!adminUser || !['OWNER', 'Developer', 'MODERATOR'].includes(adminUser.role)) {
+                    return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
+                }
+                
+                const warnIdx = db.warns.findIndex(w => w.id === warnId);
+                if (warnIdx === -1) return NextResponse.json({ error: "Выговор не найден" }, { status: 404 });
+                
+                db.warns[warnIdx].status = 'EXPIRED';
+                
+                const targetUserId = db.warns[warnIdx].user_id;
+                const count = db.warns.filter(w => w.user_id === targetUserId && w.status === 'ACTIVE').length;
+                const idx = db.users.findIndex(u => u.id === targetUserId);
+                if (idx !== -1) {
+                    db.users[idx].warns_count = count;
+                }
+                
+                saveDemoDb(db);
+                return NextResponse.json({ success: true });
+            }
+        }
+        
+        else if (action === 'replyFeedback') {
+            const { feedbackId, replyText, status: nextStatus } = body;
+            
+            if (supabase) {
+                const { data: adminUser } = await supabase.from('profiles').select('role').eq('id', adminUserId).maybeSingle();
+                if (!adminUser || !['OWNER', 'Developer', 'MODERATOR'].includes(adminUser.role)) {
+                    return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
+                }
+                
+                await supabase.from('feedback').update({
+                    status: nextStatus || 'APPROVED',
+                    admin_comment: replyText || 'Рассмотрено администратором синдиката.'
+                }).eq('id', feedbackId);
+                
+                return NextResponse.json({ success: true });
+            } else {
+                const db = getDemoDb();
+                const adminUser = db.users.find(u => u.id === adminUserId);
+                if (!adminUser || !['OWNER', 'Developer', 'MODERATOR'].includes(adminUser.role)) {
+                    return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
+                }
+                
+                const fbIdx = db.feedback.findIndex(f => f.id === feedbackId);
+                if (fbIdx === -1) return NextResponse.json({ error: "Обращение не найдено" }, { status: 404 });
+                
+                db.feedback[fbIdx].status = nextStatus || 'APPROVED';
+                db.feedback[fbIdx].admin_comment = replyText || 'Рассмотрено';
                 
                 saveDemoDb(db);
                 return NextResponse.json({ success: true });

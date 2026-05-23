@@ -2176,3 +2176,281 @@ button, input, select, textarea {
     }
 }
 
+/* ==========================================================================
+   2026 High-Fidelity Glassmorphism & Micro-Animations
+   ========================================================================== */
+.glass-panel {
+    background: rgba(10, 8, 12, 0.42) !important;
+    backdrop-filter: blur(25px) saturate(185%) !important;
+    -webkit-backdrop-filter: blur(25px) saturate(185%) !important;
+    border: 1px solid rgba(212, 175, 55, 0.08) !important;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65), inset 0 0 15px rgba(255, 255, 255, 0.01) !important;
+}
+
+.glass-panel:hover {
+    border-color: rgba(212, 175, 55, 0.22) !important;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.72), 0 0 20px rgba(212, 175, 55, 0.08), inset 0 0 15px rgba(255, 255, 255, 0.02) !important;
+}
+
+/* Smooth Tab Page Transitions */
+.tab-panel.active {
+    display: flex;
+    flex-direction: column;
+    animation: slideUpAndFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideUpAndFade {
+    0% {
+        opacity: 0;
+        transform: translateY(20px) scale(0.985);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Glassmorphic Modals with fluid spring physics */
+.modal-overlay {
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    background: rgba(4, 3, 5, 0.6) !important;
+    transition: var(--transition-smooth);
+}
+
+.modal-content {
+    background: rgba(12, 10, 15, 0.85) !important;
+    backdrop-filter: blur(30px) saturate(190%) !important;
+    border: 1.5px solid rgba(212, 175, 55, 0.2) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.85), var(--shadow-neon-intense) !important;
+    transform: scale(0.94);
+    opacity: 0;
+    transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.15); /* spring zoom physics */
+}
+
+.modal-overlay.active .modal-content {
+    transform: scale(1);
+    opacity: 1;
+}
+
+/* Premium Discord Join Sidebar Banner */
+.discord-banner-sidebar {
+    background: linear-gradient(135deg, rgba(88, 101, 242, 0.15) 0%, rgba(205, 162, 66, 0.03) 100%);
+    border: 1px dashed rgba(88, 101, 242, 0.4);
+    border-radius: 12px;
+    padding: 1.25rem;
+    margin: 1.5rem 0;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: var(--transition-smooth);
+}
+
+.discord-banner-sidebar::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(88, 101, 242, 0.08) 0%, transparent 60%);
+    pointer-events: none;
+}
+
+.discord-banner-sidebar:hover {
+    border-color: rgba(88, 101, 242, 0.8);
+    box-shadow: 0 0 15px rgba(88, 101, 242, 0.15);
+}
+
+.btn-discord-join {
+    background: #5865f2;
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 0.82rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 10px 16px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 15px rgba(88, 101, 242, 0.35);
+    margin-top: 10px;
+    width: 100%;
+    justify-content: center;
+}
+
+.btn-discord-join:hover {
+    background: #4752c4;
+    box-shadow: 0 6px 20px rgba(88, 101, 242, 0.65), 0 0 10px var(--primary-glow);
+    transform: translateY(-1.5px);
+}
+
+/* Treasury requests pipelines */
+.treasury-tabs-wrapper {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.treasury-request-card {
+    background: rgba(255,255,255,0.01);
+    border: 1px solid rgba(212, 175, 55, 0.06);
+    border-radius: 10px;
+    padding: 18px;
+    transition: var(--transition-smooth);
+    margin-bottom: 12px;
+}
+
+.treasury-request-card:hover {
+    background: rgba(212, 175, 55, 0.03);
+    border-color: rgba(212, 175, 55, 0.2);
+}
+
+.treasury-req-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.treasury-badge {
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.treasury-badge.pending {
+    background: rgba(229, 192, 96, 0.08);
+    color: #e5c060;
+    border: 1px solid rgba(229, 192, 96, 0.25);
+}
+
+.treasury-badge.approved {
+    background: rgba(205, 162, 66, 0.08);
+    color: var(--primary);
+    border: 1px solid rgba(205, 162, 66, 0.25);
+}
+
+.treasury-badge.rejected {
+    background: rgba(223, 71, 71, 0.08);
+    color: var(--danger);
+    border: 1px solid rgba(223, 71, 71, 0.25);
+}
+
+/* File PC upload custom style */
+.file-upload-glow-wrap {
+    position: relative;
+    border: 1.5px dashed rgba(212, 175, 55, 0.25);
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    background: rgba(0,0,0,0.4);
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-top: 1rem;
+}
+
+.file-upload-glow-wrap:hover {
+    border-color: var(--primary);
+    background: rgba(205, 162, 66, 0.05);
+    box-shadow: 0 0 15px rgba(205, 162, 66, 0.15);
+}
+
+.file-upload-glow-wrap input[type="file"] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.file-upload-icon {
+    font-size: 2rem;
+    color: var(--primary);
+    text-shadow: 0 0 10px rgba(205, 162, 66, 0.3);
+}
+
+/* Disciplinary & Feedback Admin components */
+.discipline-dossier-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 1.5rem;
+}
+
+.dossier-card {
+    background: rgba(255, 255, 255, 0.01);
+    border: 1px solid rgba(212, 175, 55, 0.06);
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: var(--transition-smooth);
+}
+
+.dossier-card:hover {
+    border-color: rgba(212, 175, 55, 0.2);
+    background: rgba(212, 175, 55, 0.02);
+}
+
+.feedback-reply-area {
+    margin-top: 15px;
+    padding: 15px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(212, 175, 55, 0.1);
+}
+
+.feedback-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+/* Status badges for treasury & feedback requests */
+.status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    font-size: 0.72rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+.status-badge.pending {
+    background: rgba(212, 175, 55, 0.15) !important;
+    color: var(--primary) !important;
+    border: 1px solid rgba(212, 175, 55, 0.3) !important;
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.15) !important;
+}
+.status-badge.approved {
+    background: rgba(82, 196, 26, 0.15) !important;
+    color: #52c41a !important;
+    border: 1px solid rgba(82, 196, 26, 0.3) !important;
+    box-shadow: 0 0 15px rgba(82, 196, 26, 0.15) !important;
+}
+.status-badge.rejected {
+    background: rgba(255, 77, 79, 0.15) !important;
+    color: #ff4d4f !important;
+    border: 1px solid rgba(255, 77, 79, 0.3) !important;
+    box-shadow: 0 0 15px rgba(255, 77, 79, 0.15) !important;
+}
+
+
