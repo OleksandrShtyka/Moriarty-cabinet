@@ -8,6 +8,15 @@ const CONFIG_PATH = path.join(process.cwd(), 'config.json');
 
 import { getServerConfig } from '../../config/route';
 
+// Helper to generate a valid UUID v4
+function generateUuidV4() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
 // Helper to obtain Supabase Client
 function getSupabaseClient() {
     const config = getServerConfig();
@@ -108,7 +117,7 @@ export async function POST(request) {
             } else {
                 // Create profile under static_id 'DS-ID'
                 const newProfile = {
-                    id: 'user-uuid-' + Math.random().toString(36).substr(2, 9), // Supabase Auth bypass or manual registration mapping
+                    id: generateUuidV4(),
                     character_name: discordUser.character_name,
                     static_id: `DS-${discordUser.id}`,
                     role: 'MEMBER',
