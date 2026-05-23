@@ -82,3 +82,10 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.feedback (id, user_id, type, target_member, text, status)
 VALUES ('88888888-8888-8888-8888-888888888888', '44444444-4444-4444-4444-444444444444', 'COMPLAINT', 'Narek_Toretto', 'Берет семейный транспорт без спроса и бросает без бензина на трассе.', 'PENDING')
 ON CONFLICT (id) DO NOTHING;
+
+-- 9. DISABLE ROW LEVEL SECURITY (RLS) on all tables for seamless API access
+ALTER TABLE public.profiles DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.warns DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.feedback DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.transactions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.system_settings DISABLE ROW LEVEL SECURITY;
