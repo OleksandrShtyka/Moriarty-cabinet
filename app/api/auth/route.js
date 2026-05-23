@@ -104,7 +104,7 @@ export async function POST(request) {
                 return NextResponse.json({ user: { ...profile, email: data.user.email } });
             } else {
                 const db = getDemoDb();
-                const matched = db.users.find(u => u.email === email && email.split('@')[0] === password);
+                const matched = db.users.find(u => u.email === email && (u.password ? u.password === password : email.split('@')[0] === password));
                 if (matched) {
                     return NextResponse.json({ user: matched });
                 } else {

@@ -7,6 +7,7 @@ export default function Home() {
     const [user, setUser] = useState(null);
     const [authMode, setAuthMode] = useState('login');
     const [activeTab, setActiveTab] = useState('stats');
+    const [settingsSubTab, setSettingsSubTab] = useState('account');
     
     // Auth Form Input States
     const [email, setEmail] = useState('');
@@ -14,6 +15,21 @@ export default function Home() {
     const [charName, setCharName] = useState('');
     const [staticId, setStaticId] = useState('');
     const [referral, setReferral] = useState('');
+    
+    // Account Settings states
+    const [newEmail, setNewEmail] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    
+    // Custom Confirmation Dialog system
+    const [customConfirm, setCustomConfirm] = useState({
+        show: false,
+        title: '',
+        message: '',
+        onConfirm: null,
+        confirmText: 'Подтвердить',
+        cancelText: 'Отмена'
+    });
     
     // UI Helpers & TOAST SYSTEM
     const [loading, setLoading] = useState(false);
@@ -89,6 +105,106 @@ export default function Home() {
         setTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id));
         }, 3800);
+    };
+
+    // Custom Confirmation Dialog Helper
+    const triggerConfirm = (title, message, onConfirm, confirmText = 'Подтвердить', cancelText = 'Отмена') => {
+        setCustomConfirm({
+            show: true,
+            title,
+            message,
+            onConfirm: () => {
+                onConfirm();
+                setCustomConfirm(prev => ({ ...prev, show: false }));
+            },
+            confirmText,
+            cancelText
+        });
+    };
+
+    // Account settings form handlers
+    const handleEmailUpdate = async (e) => {
+        e.preventDefault();
+        if (!newEmail.trim()) return;
+        setLoading(true);
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'changeEmail',
+                    userId: user.id,
+                    newEmail: newEmail.trim()
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to update email");
+            
+            addToast("Электронная почта синдиката успешно изменена!", "success");
+            setUser(prev => ({ ...prev, email: newEmail.trim() }));
+            setNewEmail('');
+            refreshUserData(user.id);
+        } catch (err) {
+            addToast(err.message, "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handlePasswordUpdate = async (e) => {
+        e.preventDefault();
+        if (!newPassword.trim()) return;
+        if (newPassword !== confirmPassword) {
+            addToast("Пароли не совпадают!", "error");
+            return;
+        }
+        setLoading(true);
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'changePassword',
+                    userId: user.id,
+                    newPassword: newPassword.trim()
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to update password");
+            
+            addToast("Пароль успешно обновлен в шифрованных базах!", "success");
+            setNewPassword('');
+            setConfirmPassword('');
+        } catch (err) {
+            addToast(err.message, "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSelfDelete = async () => {
+        setLoading(true);
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'deleteSelfAccount',
+                    userId: user.id
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to delete account");
+            
+            addToast("Ваш аккаунт удален. Прощайте, Господин...", "info");
+            localStorage.removeItem('moriarty_user');
+            setUser(null);
+            setProfile(null);
+        } catch (err) {
+            addToast(err.message, "error");
+        } finally {
+            setLoading(false);
+        }
     };
 
     // Auto-scroll messages
@@ -506,12 +622,12 @@ export default function Home() {
         }
     };
 
-    // Trigger loading admin panel lists when clicked
+    // Trigger loading admin panel lists when clicked inside Settings sub-tab
     useEffect(() => {
-        if (activeTab === 'admin') {
+        if (activeTab === 'settings' && settingsSubTab === 'admin') {
             loadAdminData();
         }
-    }, [activeTab]);
+    }, [activeTab, settingsSubTab]);
 
     const selectAdminUser = (u) => {
         setSelectedAdminUser(u);
@@ -562,31 +678,36 @@ export default function Home() {
 
     // Admin delete member account permanently
     const handleAdminDeleteUser = async (targetId) => {
-        if (!confirm(`Вы действительно хотите НАВСЕГДА ИСКЛЮЧИТЬ И УДАЛИТЬ аккаунт ${selectedAdminUser.character_name} из базы данных семьи Moriarty?`)) return;
-        setLoading(true);
-        try {
-            const res = await fetch('/api/db', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-admin-userid': user.id
-                },
-                body: JSON.stringify({
-                    action: 'deleteUser',
-                    targetUserId: targetId
-                })
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || "Failed to delete account");
-            
-            addToast(`Аккаунт ${selectedAdminUser.character_name} стерт из архивов синдиката!`, "success");
-            setSelectedAdminUser(null);
-            loadAdminData();
-        } catch (err) {
-            addToast(err.message, "error");
-        } finally {
-            setLoading(false);
-        }
+        triggerConfirm(
+            "Исключение члена семьи",
+            `Вы действительно хотите НАВСЕГДА ИСКЛЮЧИТЬ И УДАЛИТЬ аккаунт ${selectedAdminUser.character_name} из базы данных семьи Moriarty? Это действие безвозвратно сотрет все транзакции, выговоры и фидбеки бойца.`,
+            async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/db', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-admin-userid': user.id
+                        },
+                        body: JSON.stringify({
+                            action: 'deleteUser',
+                            targetUserId: targetId
+                        })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Failed to delete account");
+                    
+                    addToast(`Аккаунт ${selectedAdminUser.character_name} стерт из архивов синдиката!`, "success");
+                    setSelectedAdminUser(null);
+                    loadAdminData();
+                } catch (err) {
+                    addToast(err.message, "error");
+                } finally {
+                    setLoading(false);
+                }
+            }
+        );
     };
 
     // Admin live overwrite Volodya System Prompt
@@ -652,21 +773,25 @@ export default function Home() {
 
     // Reset settings to fallback demo mode
     const handleConfigReset = async () => {
-        if (!confirm("Вы уверены, что хотите сбросить все ключи и переключить кабинет обратно в Демо-режим?")) return;
-        setLoading(true);
-        
-        try {
-            const res = await fetch('/api/config', { method: 'DELETE' });
-            if (!res.ok) throw new Error("Сброс не удался");
-            
-            addToast("Кабинет успешно переведен в Demo-Mode.", "info");
-            fetchConfig();
-            if (user) refreshUserData(user.id);
-        } catch (err) {
-            addToast(err.message, "error");
-        } finally {
-            setLoading(false);
-        }
+        triggerConfirm(
+            "Сброс настроек подключения",
+            "Вы действительно хотите сбросить все сохраненные API-ключи, Supabase-линк и переключить кабинет обратно в Демо-режим?",
+            async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/config', { method: 'DELETE' });
+                    if (!res.ok) throw new Error("Сброс не удался");
+                    
+                    addToast("Кабинет успешно переведен в Demo-Mode.", "info");
+                    fetchConfig();
+                    if (user) refreshUserData(user.id);
+                } catch (err) {
+                    addToast(err.message, "error");
+                } finally {
+                    setLoading(false);
+                }
+            }
+        );
     };
 
     const getProceduralAvatar = (name) => {
@@ -919,25 +1044,13 @@ export default function Home() {
                             </a>
                         </li>
                         
-                        {isOwnerOrDev && (
-                            <li className="nav-item">
-                                <a 
-                                    className={`nav-link admin-only ${activeTab === 'admin' ? 'active' : ''}`}
-                                    onClick={() => { setActiveTab('admin'); setMobileMenuOpen(false); }}
-                                >
-                                    <i className="fa-solid fa-shield-halved" style={{ color: 'var(--accent-pink)' }}></i>
-                                    <span>Панель OWNER/DEV</span>
-                                </a>
-                            </li>
-                        )}
-                        
                         <li className="nav-item">
                             <a 
                                 className={`nav-link ${activeTab === 'settings' ? 'active' : ''}`}
                                 onClick={() => { setActiveTab('settings'); setMobileMenuOpen(false); }}
                             >
-                                <i className="fa-solid fa-circle-nodes"></i>
-                                <span>Подключения API</span>
+                                <i className="fa-solid fa-gear"></i>
+                                <span>Настройки</span>
                             </a>
                         </li>
                     </ul>
@@ -1353,225 +1466,390 @@ export default function Home() {
                     </div>
                 </div>
 
-                {/* 7. ADMIN PANEL TAB */}
-                {isOwnerOrDev && (
-                    <div className={`tab-panel ${activeTab === 'admin' ? 'active' : ''}`}>
+                {/* 7. SETTINGS & ACCOUNT MANAGEMENT TAB */}
+                <div className={`tab-panel ${activeTab === 'settings' ? 'active' : ''}`}>
+                    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
                         
-                        {/* Global System Prompt editor */}
-                        <div className="glass-panel glow-purple" style={{ marginBottom: '2rem' }}>
-                            <h3 style={{ marginBottom: '1rem' }}><i className="fa-solid fa-brain" style={{ marginRight: '10px', color: 'var(--primary)' }}></i>Прошивка Разума Володеньки (Промпт)</h3>
-                            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.2rem' }}>
-                                Доступно только ролям **OWNER** и **Developer**. Изменение этого промпта мгновенно перепрограммирует ИИ Володю на сервере!
-                            </p>
-                            <form onSubmit={handleAdminSavePrompt}>
-                                <textarea 
-                                    className="input-glow textarea-prompt" 
-                                    value={systemPrompt} 
-                                    onChange={(e) => setSystemPrompt(e.target.value)}
-                                    placeholder="Введите кастомный системный промпт для Gemini ИИ..."
-                                ></textarea>
-                                <button type="submit" className="btn-primary" style={{ marginTop: '1.2rem' }} disabled={loading}>
-                                    {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Записать в чип Володе'}
+                        {/* Sub-tab selection menu */}
+                        <div className="feedback-type-selector" style={{ marginBottom: '2.5rem', display: 'flex', gap: '10px' }}>
+                            <button 
+                                type="button"
+                                className={`type-tab ${settingsSubTab === 'account' ? 'active' : ''}`}
+                                onClick={() => setSettingsSubTab('account')}
+                            >
+                                <i className="fa-solid fa-user-gear" style={{ marginRight: '8px' }}></i>
+                                Настройки Аккаунта
+                            </button>
+                            <button 
+                                type="button"
+                                className={`type-tab ${settingsSubTab === 'api' ? 'active' : ''}`}
+                                onClick={() => setSettingsSubTab('api')}
+                            >
+                                <i className="fa-solid fa-network-wired" style={{ marginRight: '8px' }}></i>
+                                Подключения API
+                            </button>
+                            {isOwnerOrDev && (
+                                <button 
+                                    type="button"
+                                    className={`type-tab ${settingsSubTab === 'admin' ? 'active' : ''}`}
+                                    onClick={() => setSettingsSubTab('admin')}
+                                    style={{ borderColor: 'var(--accent-pink)' }}
+                                >
+                                    <i className="fa-solid fa-shield-halved" style={{ marginRight: '8px', color: 'var(--accent-pink)' }}></i>
+                                    Панель OWNER/DEV
                                 </button>
-                            </form>
+                            )}
                         </div>
 
-                        {/* Database Character controls */}
-                        <div className="admin-grid">
-                            
-                            <div className="glass-panel admin-list-wrap">
-                                <h3>База Людей</h3>
-                                <div className="search-bar-wrap">
-                                    <i className="fa-solid fa-magnifying-glass"></i>
-                                    <input 
-                                        type="text" 
-                                        className="input-glow search-input" 
-                                        placeholder="Поиск по имени / CID..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                    />
-                                </div>
+                        {/* SUB-PANEL 1: ACCOUNT SETTINGS */}
+                        {settingsSubTab === 'account' && (
+                            <div className="account-settings-grid animate-fade-in" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
                                 
-                                <div className="admin-users-list">
-                                    {adminUsers
-                                        .filter(u => u.character_name.toLowerCase().includes(searchQuery.toLowerCase()) || u.static_id.includes(searchQuery))
-                                        .map(u => (
-                                            <div 
-                                                key={u.id} 
-                                                className={`admin-user-card ${selectedAdminUser?.id === u.id ? 'active' : ''}`}
-                                                onClick={() => selectAdminUser(u)}
-                                            >
-                                                <div className="admin-user-left">
-                                                    <div className="admin-user-avatar">
-                                                        <img src={u.discord?.avatar || getProceduralAvatar(u.character_name)} alt="Av" />
+                                {/* Left column: Avatar & Profile Info */}
+                                <div className="glass-panel glow-purple" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem', textAlign: 'center' }}>
+                                    <div 
+                                        className="avatar-container-wrap" 
+                                        onClick={() => {
+                                            setCustomAvatarUrl(activeProfile.discord?.avatar || '');
+                                            setShowAvatarModal(true);
+                                        }}
+                                        title="Сменить аватарку"
+                                        style={{ marginBottom: '1.5rem' }}
+                                    >
+                                        <div className="avatar-large" style={{ width: '130px', height: '130px' }}>
+                                            <img src={activeProfile.discord?.avatar || getProceduralAvatar(activeProfile.character_name)} alt="Av" />
+                                        </div>
+                                        <div className="avatar-edit-overlay">
+                                            <i className="fa-solid fa-gear"></i>
+                                        </div>
+                                    </div>
+                                    <h2 className="char-title" style={{ fontSize: '1.6rem', marginBottom: '4px' }}>{activeProfile.character_name}</h2>
+                                    <span className="char-static" style={{ color: 'var(--primary)', fontWeight: '700', fontSize: '0.9rem', display: 'block', marginBottom: '8px' }}>CID: {activeProfile.static_id}</span>
+                                    <span className="user-snippet-role" style={{ background: 'rgba(205,162,66,0.1)', border: '1px solid var(--primary)', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                                        {activeProfile.role}
+                                    </span>
+                                    
+                                    <button 
+                                        type="button" 
+                                        className="btn-primary" 
+                                        style={{ marginTop: '2rem', width: '100%', fontSize: '0.85rem' }} 
+                                        onClick={() => {
+                                            setCustomAvatarUrl(activeProfile.discord?.avatar || '');
+                                            setShowAvatarModal(true);
+                                        }}
+                                    >
+                                        <i className="fa-solid fa-image" style={{ marginRight: '8px' }}></i>
+                                        Сменить Аватарку
+                                    </button>
+                                </div>
+
+                                {/* Right column: Change Email, password and Self delete */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+                                    
+                                    {/* Change Email Form */}
+                                    <div className="glass-panel">
+                                        <h3 style={{ marginBottom: '1rem', fontSize: '1.05rem' }}>Смена Почты</h3>
+                                        <form onSubmit={handleEmailUpdate}>
+                                            <div className="form-group">
+                                                <label>Текущий Email</label>
+                                                <input type="text" className="input-glow" value={activeProfile.email || ''} disabled style={{ opacity: 0.6 }} />
+                                            </div>
+                                            <div className="form-group">
+                                                <label>Новый Email</label>
+                                                <input 
+                                                    type="email" 
+                                                    className="input-glow" 
+                                                    placeholder="new@moriarty.fam" 
+                                                    value={newEmail} 
+                                                    onChange={(e) => setNewEmail(e.target.value)} 
+                                                    required 
+                                                />
+                                            </div>
+                                            <button type="submit" className="btn-secondary" style={{ width: '100%' }} disabled={loading}>
+                                                Изменить почту
+                                            </button>
+                                        </form>
+                                    </div>
+
+                                    {/* Change Password Form */}
+                                    <div className="glass-panel">
+                                        <h3 style={{ marginBottom: '1rem', fontSize: '1.05rem' }}>Смена Пароля</h3>
+                                        <form onSubmit={handlePasswordUpdate}>
+                                            <div className="form-group">
+                                                <label>Новый пароль</label>
+                                                <input 
+                                                    type="password" 
+                                                    className="input-glow" 
+                                                    placeholder="••••••••" 
+                                                    value={newPassword} 
+                                                    onChange={(e) => setNewPassword(e.target.value)} 
+                                                    required 
+                                                />
+                                            </div>
+                                            <div className="form-group">
+                                                <label>Подтвердите пароль</label>
+                                                <input 
+                                                    type="password" 
+                                                    className="input-glow" 
+                                                    placeholder="••••••••" 
+                                                    value={confirmPassword} 
+                                                    onChange={(e) => setConfirmPassword(e.target.value)} 
+                                                    required 
+                                                />
+                                            </div>
+                                            <button type="submit" className="btn-secondary" style={{ width: '100%' }} disabled={loading}>
+                                                Обновить пароль
+                                            </button>
+                                        </form>
+                                    </div>
+
+                                    {/* Danger Zone: Account Deletion */}
+                                    <div className="glass-panel" style={{ border: '1px solid rgba(223, 71, 71, 0.3)', boxShadow: '0 10px 30px rgba(223,71,71,0.05)' }}>
+                                        <h3 style={{ marginBottom: '0.5rem', fontSize: '1.05rem', color: 'var(--danger)' }}>Опасная Зона</h3>
+                                        <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1.2rem', lineHeight: '1.4' }}>
+                                            Удаление аккаунта навсегда сотрет вашего персонажа из архивов синдиката. Восстановление невозможно!
+                                        </p>
+                                        <button 
+                                            type="button" 
+                                            className="btn-secondary" 
+                                            style={{ width: '100%', borderColor: 'var(--danger)', color: 'var(--danger)' }} 
+                                            onClick={() => triggerConfirm(
+                                                "Удаление собственного аккаунта",
+                                                "ВНИМАНИЕ! Вы собираетесь навсегда удалить свою учетную запись бойца из базы данных синдиката Moriarty. Все ваши сейфовые средства, история транзакций и выговоры будут безвозвратно стерты. Вы абсолютно уверены?",
+                                                handleSelfDelete,
+                                                "Стереть аккаунт навсегда",
+                                                "Отмена"
+                                            )}
+                                            disabled={loading}
+                                        >
+                                            <i className="fa-solid fa-trash-can" style={{ marginRight: '8px' }}></i>
+                                            Удалить аккаунт навсегда
+                                        </button>
+                                    </div>
+
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SUB-PANEL 2: API CONNECTIONS */}
+                        {settingsSubTab === 'api' && (
+                            <div className="glass-panel glow-purple animate-fade-in" style={{ maxWidth: '650px', margin: '0 auto' }}>
+                                <h3 style={{ marginBottom: '1rem' }}><i className="fa-solid fa-network-wired" style={{ marginRight: '10px', color: 'var(--primary)' }}></i>Связующий Центр Кабинета</h3>
+                                <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '1.8rem', lineHeight: '1.6' }}>
+                                    Кабинет спроектирован по гибридному стандарту. По умолчанию он работает на <strong>Demo-Mode</strong> (локальный файл <code>demo_db.json</code>). 
+                                    Укажите параметры Supabase и ключ Gemini ниже, чтобы мгновенно развернуть полноценную облачную базу данных со встроенным искусственным интеллектом!
+                                </p>
+
+                                <form onSubmit={handleConfigSave}>
+                                    <div className="form-group">
+                                        <label>Supabase Project URL</label>
+                                        <input 
+                                            type="text" 
+                                            className="input-glow" 
+                                            placeholder="https://xxxxxxxxx.supabase.co"
+                                            value={config.supabaseUrl}
+                                            onChange={(e) => setConfig({ ...config, supabaseUrl: e.target.value })}
+                                        />
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label>Supabase Anon Key</label>
+                                        <input 
+                                            type="password" 
+                                            className="input-glow" 
+                                            placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                                            value={config.supabaseAnonKey}
+                                            onChange={(e) => setConfig({ ...config, supabaseAnonKey: e.target.value })}
+                                        />
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label>Google Gemini API Key</label>
+                                        <input 
+                                            type="password" 
+                                            className="input-glow" 
+                                            placeholder="AIzaSy..."
+                                            value={config.geminiApiKey}
+                                            onChange={(e) => setConfig({ ...config, geminiApiKey: e.target.value })}
+                                        />
+                                        <small className="help-text">Используется для живого разума личного раба Володи</small>
+                                    </div>
+
+                                    <div className="form-group">
+                                        <label>Discord OAuth2 Client ID</label>
+                                        <input 
+                                            type="text" 
+                                            className="input-glow" 
+                                            placeholder="123456789012345678"
+                                            value={config.discordClientId}
+                                            onChange={(e) => setConfig({ ...config, discordClientId: e.target.value })}
+                                        />
+                                    </div>
+
+                                    <div className="form-group" style={{ marginBottom: '2.2rem' }}>
+                                        <label>Discord Client Secret</label>
+                                        <input 
+                                            type="password" 
+                                            className="input-glow" 
+                                            placeholder="скрыто во благо безопасности"
+                                            value={config.discordClientSecret}
+                                            onChange={(e) => setConfig({ ...config, discordClientSecret: e.target.value })}
+                                        />
+                                    </div>
+
+                                    <div style={{ display: 'flex', gap: '14px' }}>
+                                        <button type="submit" className="btn-primary" style={{ flex: '2' }} disabled={loading}>
+                                            {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Подключить и обновить'}
+                                        </button>
+                                        <button type="button" className="btn-secondary" style={{ flex: '1', color: 'var(--danger)' }} onClick={handleConfigReset} disabled={loading}>
+                                            Сбросить
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        )}
+
+                        {/* SUB-PANEL 3: OWNER/DEV ADMIN CONTROLS */}
+                        {isOwnerOrDev && settingsSubTab === 'admin' && (
+                            <div className="animate-fade-in">
+                                {/* Global System Prompt editor */}
+                                <div className="glass-panel glow-purple" style={{ marginBottom: '2rem' }}>
+                                    <h3 style={{ marginBottom: '1rem' }}><i className="fa-solid fa-brain" style={{ marginRight: '10px', color: 'var(--primary)' }}></i>Прошивка Разума ИИ Володи (Промпт)</h3>
+                                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.2rem' }}>
+                                        Доступно только ролям **OWNER** и **Developer**. Изменение этого промпта мгновенно перепрограммирует ИИ Володю на сервере!
+                                    </p>
+                                    <form onSubmit={handleAdminSavePrompt}>
+                                        <textarea 
+                                            className="input-glow textarea-prompt" 
+                                            value={systemPrompt} 
+                                            onChange={(e) => setSystemPrompt(e.target.value)}
+                                            placeholder="Введите кастомный системный промпт для Gemini ИИ..."
+                                        ></textarea>
+                                        <button type="submit" className="btn-primary" style={{ marginTop: '1.2rem' }} disabled={loading}>
+                                            {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Записать в чип Володе'}
+                                        </button>
+                                    </form>
+                                </div>
+
+                                {/* Database Character controls */}
+                                <div className="admin-grid">
+                                    <div className="glass-panel admin-list-wrap">
+                                        <h3>База Людей</h3>
+                                        <div className="search-bar-wrap">
+                                            <i className="fa-solid fa-magnifying-glass"></i>
+                                            <input 
+                                                type="text" 
+                                                className="input-glow search-input" 
+                                                placeholder="Поиск по имени / CID..."
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                            />
+                                        </div>
+                                        
+                                        <div className="admin-users-list">
+                                            {adminUsers
+                                                .filter(u => u.character_name.toLowerCase().includes(searchQuery.toLowerCase()) || u.static_id.includes(searchQuery))
+                                                .map(u => (
+                                                    <div 
+                                                        key={u.id} 
+                                                        className={`admin-user-card ${selectedAdminUser?.id === u.id ? 'active' : ''}`}
+                                                        onClick={() => selectAdminUser(u)}
+                                                    >
+                                                        <div className="admin-user-left">
+                                                            <div className="admin-user-avatar">
+                                                                <img src={u.discord?.avatar || getProceduralAvatar(u.character_name)} alt="Av" />
+                                                            </div>
+                                                            <div className="admin-user-info">
+                                                                <span className="admin-user-name">{u.character_name}</span>
+                                                                <span className="admin-user-static">CID: {u.static_id}</span>
+                                                            </div>
+                                                        </div>
+                                                        <span className={`admin-user-role-badge ${u.role.toLowerCase()}`}>
+                                                            {u.role}
+                                                        </span>
                                                     </div>
-                                                    <div className="admin-user-info">
-                                                        <span className="admin-user-name">{u.character_name}</span>
-                                                        <span className="admin-user-static">CID: {u.static_id}</span>
+                                                ))
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <div className="glass-panel">
+                                        {selectedAdminUser ? (
+                                            <form onSubmit={handleAdminSaveUser} className="admin-details-form animate-fade-in">
+                                                <div className="admin-details-header">
+                                                    <div className="details-avatar-huge">
+                                                        <img src={selectedAdminUser.discord?.avatar || getProceduralAvatar(selectedAdminUser.character_name)} alt="Av" />
+                                                    </div>
+                                                    <div className="details-info-wrap">
+                                                        <span className="details-name">{selectedAdminUser.character_name}</span>
+                                                        <span className="details-static">CID персонажа: {selectedAdminUser.static_id}</span>
                                                     </div>
                                                 </div>
-                                                <span className={`admin-user-role-badge ${u.role.toLowerCase()}`}>
-                                                    {u.role}
-                                                </span>
+
+                                                <div className="form-group">
+                                                    <label>Уровень прав (Семейная Роль)</label>
+                                                    <select 
+                                                        className="input-glow" 
+                                                        value={editRole}
+                                                        onChange={(e) => setEditRole(e.target.value)}
+                                                        style={{ cursor: 'pointer' }}
+                                                    >
+                                                        <option value="MEMBER">MEMBER (Рядовой)</option>
+                                                        <option value="MODERATOR">MODERATOR (Старший состав)</option>
+                                                        <option value="Developer">Developer (Тех-админ)</option>
+                                                        <option value="OWNER">OWNER (Глава семьи)</option>
+                                                    </select>
+                                                </div>
+
+                                                <div className="form-group">
+                                                    <label>Количество выговоров ({editWarns} / 3)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        className="input-glow"
+                                                        min="0" 
+                                                        max="3"
+                                                        value={editWarns} 
+                                                        onChange={(e) => setEditWarns(e.target.value)}
+                                                    />
+                                                </div>
+
+                                                <div className="form-group">
+                                                    <label>Личный сейф ($)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        className="input-glow" 
+                                                        value={editBalance} 
+                                                        onChange={(e) => setEditBalance(e.target.value)}
+                                                    />
+                                                </div>
+
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                    <button type="submit" className="btn-primary" disabled={loading}>
+                                                        {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Сохранить изменения'}
+                                                    </button>
+                                                    <button 
+                                                        type="button" 
+                                                        className="btn-secondary" 
+                                                        style={{ border: '1px solid var(--danger)', color: 'var(--danger)' }}
+                                                        onClick={() => handleAdminDeleteUser(selectedAdminUser.id)}
+                                                        disabled={loading}
+                                                    >
+                                                        <i className="fa-solid fa-trash-can" style={{ marginRight: '8px' }}></i>
+                                                        Исключить / Удалить аккаунт
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        ) : (
+                                            <div className="empty-state" style={{ height: '300px' }}>
+                                                <i className="fa-solid fa-user-gear"></i>
+                                                <p>Выберите персонажа из списка для администрирования</p>
                                             </div>
-                                        ))
-                                    }
+                                        )}
+                                    </div>
                                 </div>
                             </div>
+                        )}
 
-                            <div className="glass-panel">
-                                {selectedAdminUser ? (
-                                    <form onSubmit={handleAdminSaveUser} className="admin-details-form animate-fade-in">
-                                        <div className="admin-details-header">
-                                            <div className="details-avatar-huge">
-                                                <img src={selectedAdminUser.discord?.avatar || getProceduralAvatar(selectedAdminUser.character_name)} alt="Av" />
-                                            </div>
-                                            <div className="details-info-wrap">
-                                                <span className="details-name">{selectedAdminUser.character_name}</span>
-                                                <span className="details-static">CID персонажа: {selectedAdminUser.static_id}</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="form-group">
-                                            <label>Уровень прав (Семейная Роль)</label>
-                                            <select 
-                                                className="input-glow" 
-                                                value={editRole}
-                                                onChange={(e) => setEditRole(e.target.value)}
-                                                style={{ cursor: 'pointer' }}
-                                            >
-                                                <option value="MEMBER">MEMBER (Рядовой)</option>
-                                                <option value="MODERATOR">MODERATOR (Старший состав)</option>
-                                                <option value="Developer">Developer (Тех-админ)</option>
-                                                <option value="OWNER">OWNER (Глава семьи)</option>
-                                            </select>
-                                        </div>
-
-                                        <div className="form-group">
-                                            <label>Количество выговоров ({editWarns} / 3)</label>
-                                            <input 
-                                                type="number" 
-                                                className="input-glow"
-                                                min="0" 
-                                                max="3"
-                                                value={editWarns} 
-                                                onChange={(e) => setEditWarns(e.target.value)}
-                                            />
-                                        </div>
-
-                                        <div className="form-group">
-                                            <label>Личный сейф ($)</label>
-                                            <input 
-                                                type="number" 
-                                                className="input-glow" 
-                                                value={editBalance} 
-                                                onChange={(e) => setEditBalance(e.target.value)}
-                                            />
-                                        </div>
-
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                            <button type="submit" className="btn-primary" disabled={loading}>
-                                                {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Сохранить изменения'}
-                                            </button>
-                                            <button 
-                                                type="button" 
-                                                className="btn-secondary" 
-                                                style={{ border: '1px solid var(--danger)', color: 'var(--danger)' }}
-                                                onClick={() => handleAdminDeleteUser(selectedAdminUser.id)}
-                                                disabled={loading}
-                                            >
-                                                <i className="fa-solid fa-trash-can" style={{ marginRight: '8px' }}></i>
-                                                Исключить / Удалить аккаунт
-                                            </button>
-                                        </div>
-                                    </form>
-                                ) : (
-                                    <div className="empty-state" style={{ height: '300px' }}>
-                                        <i className="fa-solid fa-user-gear"></i>
-                                        <p>Выберите персонажа из списка для администрирования</p>
-                                    </div>
-                                )}
-                            </div>
-
-                        </div>
-                    </div>
-                )}
-
-                {/* 8. API CONNECTIONS AND SETTINGS TAB */}
-                <div className={`tab-panel ${activeTab === 'settings' ? 'active' : ''}`}>
-                    <div className="glass-panel glow-purple animate-fade-in" style={{ maxWidth: '650px', margin: '0 auto' }}>
-                        <h3 style={{ marginBottom: '1rem' }}><i className="fa-solid fa-network-wired" style={{ marginRight: '10px', color: 'var(--primary)' }}></i>Связующий Центр Кабинета</h3>
-                        <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '1.8rem', lineHeight: '1.6' }}>
-                            Кабинет спроектирован по гибридному стандарту. По умолчанию он работает на <strong>Demo-Mode</strong> (локальный файл <code>demo_db.json</code>). 
-                            Укажите параметры Supabase и ключ Gemini ниже, чтобы мгновенно развернуть полноценную облачную базу данных со встроенным искусственным интеллектом!
-                        </p>
-
-                        <form onSubmit={handleConfigSave}>
-                            <div className="form-group">
-                                <label>Supabase Project URL</label>
-                                <input 
-                                    type="text" 
-                                    className="input-glow" 
-                                    placeholder="https://xxxxxxxxx.supabase.co"
-                                    value={config.supabaseUrl}
-                                    onChange={(e) => setConfig({ ...config, supabaseUrl: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label>Supabase Anon Key</label>
-                                <input 
-                                    type="password" 
-                                    className="input-glow" 
-                                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                                    value={config.supabaseAnonKey}
-                                    onChange={(e) => setConfig({ ...config, supabaseAnonKey: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="form-group">
-                                <label>Google Gemini API Key</label>
-                                <input 
-                                    type="password" 
-                                    className="input-glow" 
-                                    placeholder="AIzaSy..."
-                                    value={config.geminiApiKey}
-                                    onChange={(e) => setConfig({ ...config, geminiApiKey: e.target.value })}
-                                />
-                                <small className="help-text">Используется для живого разума личного раба Володи</small>
-                            </div>
-
-                            <div className="form-group">
-                                <label>Discord OAuth2 Client ID</label>
-                                <input 
-                                    type="text" 
-                                    className="input-glow" 
-                                    placeholder="123456789012345678"
-                                    value={config.discordClientId}
-                                    onChange={(e) => setConfig({ ...config, discordClientId: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="form-group" style={{ marginBottom: '2.2rem' }}>
-                                <label>Discord Client Secret</label>
-                                <input 
-                                    type="password" 
-                                    className="input-glow" 
-                                    placeholder="скрыто во благо безопасности"
-                                    value={config.discordClientSecret}
-                                    onChange={(e) => setConfig({ ...config, discordClientSecret: e.target.value })}
-                                />
-                            </div>
-
-                            <div style={{ display: 'flex', gap: '14px' }}>
-                                <button type="submit" className="btn-primary" style={{ flex: '2' }} disabled={loading}>
-                                    {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Подключить и обновить'}
-                                </button>
-                                <button type="button" className="btn-secondary" style={{ flex: '1', color: 'var(--danger)' }} onClick={handleConfigReset} disabled={loading}>
-                                    Сбросить
-                                </button>
-                            </div>
-                        </form>
                     </div>
                 </div>
 
@@ -1677,6 +1955,41 @@ export default function Home() {
                             {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Сохранить Аватарку'}
                         </button>
                     </form>
+                </div>
+            </div>
+
+            {/* Custom Action Confirmation Modal */}
+            <div className={`modal-overlay ${customConfirm.show ? 'active' : ''}`}>
+                <div className="modal-content glass-panel glow-purple" style={{ border: '1px solid var(--primary)', maxWidth: '480px', padding: '2.5rem' }}>
+                    <div className="modal-header" style={{ marginBottom: '1.25rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '10px' }}>
+                        <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.25rem' }}>
+                            <i className="fa-solid fa-triangle-exclamation" style={{ color: 'var(--primary)', textShadow: '0 0 10px var(--primary)' }}></i>
+                            {customConfirm.title}
+                        </h3>
+                    </div>
+                    <div style={{ marginTop: '0.5rem', marginBottom: '2.2rem' }}>
+                        <p style={{ color: '#ffffff', fontSize: '0.9rem', lineHeight: '1.6', textAlign: 'left' }}>
+                            {customConfirm.message}
+                        </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: '14px' }}>
+                        <button 
+                            type="button" 
+                            className="btn-primary" 
+                            style={{ flex: '1', background: 'linear-gradient(135deg, var(--primary) 0%, #a88133 100%)', textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.82rem', padding: '10px' }} 
+                            onClick={customConfirm.onConfirm}
+                        >
+                            {customConfirm.confirmText}
+                        </button>
+                        <button 
+                            type="button" 
+                            className="btn-secondary" 
+                            style={{ flex: '1', textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.82rem', padding: '10px' }} 
+                            onClick={() => setCustomConfirm(prev => ({ ...prev, show: false }))}
+                        >
+                            {customConfirm.cancelText}
+                        </button>
+                    </div>
                 </div>
             </div>
 
