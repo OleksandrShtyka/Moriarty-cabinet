@@ -371,6 +371,22 @@ export async function POST(request) {
             }
         }
         
+        else if (action === 'unlinkDiscord') {
+            if (supabase) {
+                const { error } = await supabase.from('profiles').update({ discord: null }).eq('id', userId);
+                if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+                return NextResponse.json({ success: true });
+            } else {
+                const db = getDemoDb();
+                const idx = db.users.findIndex(u => u.id === userId);
+                if (idx === -1) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+                
+                db.users[idx].discord = null;
+                saveDemoDb(db);
+                return NextResponse.json({ success: true });
+            }
+        }
+        
         else if (action === 'deleteUser') {
             if (supabase) {
                 const { data: adminUser } = await supabase.from('profiles').select('role').eq('id', adminUserId).maybeSingle();

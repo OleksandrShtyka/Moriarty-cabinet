@@ -103,12 +103,35 @@ export async function POST(request) {
         }
         
         // Match user or register
+        const isBinding = body.state && body.state.startsWith('BIND:');
+        const bindingUserId = isBinding ? body.state.split('BIND:')[1] : null;
+
         if (supabase) {
-            // Look up in profiles
+            if (isBinding) {
+                // Link Discord metadata to the existing user profile
+                const { error: updErr } = await supabase
+                    .from('profiles')
+                    .update({ discord: discordUser })
+                    .eq('id', bindingUserId);
+                    
+                if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
+                
+                const { data: updatedProfile, error: getErr } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', bindingUserId)
+                    .maybeSingle();
+                    
+                if (getErr || !updatedProfile) return NextResponse.json({ error: "Ошибка при получении профиля после привязки" }, { status: 500 });
+                
+                return NextResponse.json({ user: updatedProfile });
+            }
+
+            // Look up in profiles - match by either static_id OR the nested discord.id
             const { data: existing, error } = await supabase
                 .from('profiles')
                 .select('*')
-                .eq('static_id', `DS-${discordUser.id}`)
+                .or(`static_id.eq.DS-${discordUser.id},discord->>id.eq.${discordUser.id}`)
                 .maybeSingle();
                 
             if (existing) {
@@ -123,6 +146,7 @@ export async function POST(request) {
                     role: 'MEMBER',
                     balance: 50000.00,
                     warns_count: 0,
+                    discord: discordUser, // Save discord profile directly
                     created_at: new Date().toISOString()
                 };
                 
@@ -134,7 +158,18 @@ export async function POST(request) {
         } else {
             // Local Demo Database
             const db = getDemoDb();
-            const existing = db.users.find(u => u.static_id === `DS-${discordUser.id}`);
+            
+            if (isBinding) {
+                const idx = db.users.findIndex(u => u.id === bindingUserId);
+                if (idx !== -1) {
+                    db.users[idx].discord = discordUser;
+                    saveDemoDb(db);
+                    return NextResponse.json({ user: db.users[idx] });
+                }
+                return NextResponse.json({ error: "Пользователь не найден для привязки" }, { status: 404 });
+            }
+
+            const existing = db.users.find(u => u.static_id === `DS-${discordUser.id}` || (u.discord && u.discord.id === discordUser.id));
             
             if (existing) {
                 existing.discord = discordUser;

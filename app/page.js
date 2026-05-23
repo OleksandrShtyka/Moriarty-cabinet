@@ -137,6 +137,90 @@ export default function Home() {
         });
     };
 
+    // Trigger real Discord OAuth binding flow
+    const handleLinkDiscord = () => {
+        if (!config.discordClientId) {
+            addToast("Настройки Discord OAuth2 не заданы на сервере!", "error");
+            return;
+        }
+        
+        const clientId = config.discordClientId;
+        const redirectUri = encodeURIComponent(window.location.origin + '/');
+        const state = `BIND:${user.id}`;
+        
+        window.location.href = `https://discord.com/api/oauth2/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=identify&state=${state}`;
+    };
+
+    // Unlink Discord connection
+    const handleUnlinkDiscord = async () => {
+        triggerConfirm(
+            "Отвязка аккаунта Discord",
+            "Вы действительно хотите отвязать вашу учетную запись Discord от этого кабинета? Вы больше не сможете входить с ее помощью, пока не привяжете заново.",
+            async () => {
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/db', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            action: 'unlinkDiscord',
+                            userId: user.id
+                        })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Failed to unlink Discord");
+                    
+                    addToast("Учетная запись Discord успешно отвязана от кабинета!", "success");
+                    refreshUserData(user.id);
+                } catch (err) {
+                    addToast(err.message, "error");
+                } finally {
+                    setLoading(false);
+                }
+            },
+            "Отвязать Discord",
+            "Отмена"
+        );
+    };
+
+    // Process real Discord OAuth code and state callback
+    const handleDiscordCallback = async (code, state) => {
+        setLoading(true);
+        addToast("Связывание с серверами Discord...", "info");
+        try {
+            const redirectUri = window.location.origin + '/';
+            
+            const res = await fetch('/api/auth/discord', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    code, 
+                    state, 
+                    redirectUri 
+                })
+            });
+            
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Discord Auth Exchange failed');
+            
+            if (state && state.startsWith('BIND:')) {
+                addToast("Аккаунт Discord успешно привязан!", "success");
+                const boundUid = state.split('BIND:')[1];
+                refreshUserData(boundUid);
+            } else {
+                setUser(data.user);
+                setProfile(data.user);
+                localStorage.setItem('moriarty_user', JSON.stringify(data.user));
+                addToast('Вход через Discord успешно выполнен!', 'success');
+                refreshUserData(data.user.id);
+            }
+        } catch (err) {
+            addToast(err.message, "error");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     // Account settings form handlers
     const handleEmailUpdate = async (e) => {
         e.preventDefault();
@@ -250,11 +334,21 @@ export default function Home() {
     // Check configuration and active session on load
     useEffect(() => {
         fetchConfig();
-        const storedUser = localStorage.getItem('moriarty_user');
-        if (storedUser) {
-            const parsed = JSON.parse(storedUser);
-            setUser(parsed);
-            refreshUserData(parsed.id);
+        
+        const searchParams = new URLSearchParams(window.location.search);
+        const code = searchParams.get('code');
+        const state = searchParams.get('state');
+        
+        if (code) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+            handleDiscordCallback(code, state);
+        } else {
+            const storedUser = localStorage.getItem('moriarty_user');
+            if (storedUser) {
+                const parsed = JSON.parse(storedUser);
+                setUser(parsed);
+                refreshUserData(parsed.id);
+            }
         }
     }, []);
 
@@ -1965,6 +2059,39 @@ export default function Home() {
                                         <i className="fa-solid fa-image" style={{ marginRight: '8px' }}></i>
                                         Сменить Аватарку
                                     </button>
+
+                                    {/* Discord Account Binding Module */}
+                                    <div style={{ marginTop: '1.5rem', width: '100%', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '1.5rem' }}>
+                                        {activeProfile.discord && activeProfile.discord.id ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', background: 'rgba(88, 101, 242, 0.08)', border: '1px solid rgba(88, 101, 242, 0.2)', padding: '12px', borderRadius: '10px' }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%', justifyContent: 'center' }}>
+                                                    <i className="fa-brands fa-discord" style={{ color: '#5865f2', fontSize: '1.2rem' }}></i>
+                                                    <span style={{ fontSize: '0.82rem', fontWeight: 'bold' }}>{activeProfile.discord.username}</span>
+                                                    <span style={{ fontSize: '0.65rem', background: '#5865f2', color: '#fff', padding: '2px 6px', borderRadius: '4px', textTransform: 'uppercase', fontWeight: 'bold' }}>Связан</span>
+                                                </div>
+                                                <button 
+                                                    type="button" 
+                                                    className="btn-secondary" 
+                                                    style={{ border: '1px solid #ff4d4f', color: '#ff4d4f', fontSize: '0.75rem', padding: '4px 10px', marginTop: '4px', width: '100%' }}
+                                                    onClick={handleUnlinkDiscord}
+                                                    disabled={loading}
+                                                >
+                                                    Отвязать Discord
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button 
+                                                type="button" 
+                                                className="btn-discord" 
+                                                style={{ width: '100%', fontSize: '0.82rem', padding: '10px', background: 'linear-gradient(135deg, #5865f2 0%, #4752c4 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', border: 'none', color: '#fff', cursor: 'pointer', borderRadius: '8px' }}
+                                                onClick={handleLinkDiscord}
+                                                disabled={loading}
+                                            >
+                                                <i className="fa-brands fa-discord"></i>
+                                                <span>Привязать Discord</span>
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Right column: Change Email, password and Self delete */}
