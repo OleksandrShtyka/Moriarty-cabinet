@@ -8,7 +8,16 @@
       "role": "OWNER",
       "balance": 15250000,
       "warns_count": 0,
-      "created_at": "2026-04-10T12:00:00Z"
+      "created_at": "2026-04-10T12:00:00Z",
+      "is_media": true,
+      "media_trash_counter": 12,
+      "streamer_settings": {
+        "obs_host": "localhost",
+        "obs_port": "4455",
+        "discord_webhook": "https://discord.com/api/webhooks/mock-id/mock-token",
+        "announcement_title": "Апокалипсис в Лос-Сантосе! Мориарти выходит на охоту!",
+        "announcement_desc": "Залетайте на стрим! Сегодня чистим город от фриков, берем под полный контроль особняк и раздаем бабло новичкам."
+      }
     },
     {
       "id": "dev-uuid-3333-4444",
@@ -18,7 +27,10 @@
       "role": "Developer",
       "balance": 5450000,
       "warns_count": 0,
-      "created_at": "2026-04-12T15:30:00Z"
+      "created_at": "2026-04-12T15:30:00Z",
+      "is_media": true,
+      "media_trash_counter": 0,
+      "streamer_settings": {}
     },
     {
       "id": "mod-uuid-5555-6666",
@@ -28,7 +40,10 @@
       "role": "MODERATOR",
       "balance": 650000,
       "warns_count": 1,
-      "created_at": "2026-04-15T18:45:00Z"
+      "created_at": "2026-04-15T18:45:00Z",
+      "is_media": false,
+      "media_trash_counter": 0,
+      "streamer_settings": {}
     },
     {
       "id": "member-uuid-7777-8888",
@@ -38,7 +53,10 @@
       "role": "MEMBER",
       "balance": 50000,
       "warns_count": 0,
-      "created_at": "2026-04-17T20:30:00Z"
+      "created_at": "2026-04-17T20:30:00Z",
+      "is_media": false,
+      "media_trash_counter": 0,
+      "streamer_settings": {}
     }
   ],
   "warns": [

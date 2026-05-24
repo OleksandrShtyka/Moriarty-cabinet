@@ -168,7 +168,7 @@ export async function POST(request) {
     
     try {
         const body = await request.json();
-        const { action, userId, amount, senderId, targetStaticId, type, targetMember, text, targetUserId, role, warns, balance, prompt } = body;
+        const { action, userId, amount, senderId, targetStaticId, type, targetMember, text, targetUserId, role, warns, balance, prompt, isMedia, streamerSettings, mediaTrashCounter } = body;
         const adminUserId = request.headers.get('x-admin-userid');
         
         if (supabase) {
@@ -304,7 +304,7 @@ export async function POST(request) {
                 if (!adminUser || !['OWNER', 'Developer'].includes(adminUser.role)) {
                     return NextResponse.json({ error: "В доступе отказано!" }, { status: 403 });
                 }
-                const { error } = await supabase.from('profiles').update({ role, warns_count: warns, balance }).eq('id', targetUserId);
+                const { error } = await supabase.from('profiles').update({ role, warns_count: warns, balance, is_media: isMedia }).eq('id', targetUserId);
                 if (error) return NextResponse.json({ error: error.message }, { status: 400 });
                 return NextResponse.json({ success: true });
             } else {
@@ -319,7 +319,30 @@ export async function POST(request) {
                 db.users[idx].role = role;
                 db.users[idx].warns_count = parseInt(warns) || 0;
                 db.users[idx].balance = parseFloat(balance) || 0;
+                db.users[idx].is_media = !!isMedia;
                 
+                saveDemoDb(db);
+                return NextResponse.json({ success: true });
+            }
+        }
+        
+        else if (action === 'updateStreamerSettings') {
+            if (supabase) {
+                const { error } = await supabase.from('profiles').update({ 
+                    streamer_settings: streamerSettings, 
+                    media_trash_counter: mediaTrashCounter !== undefined ? mediaTrashCounter : 0 
+                }).eq('id', userId);
+                if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+                return NextResponse.json({ success: true });
+            } else {
+                const db = getDemoDb();
+                const idx = db.users.findIndex(u => u.id === userId);
+                if (idx === -1) return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 });
+                
+                db.users[idx].streamer_settings = streamerSettings || {};
+                if (mediaTrashCounter !== undefined) {
+                    db.users[idx].media_trash_counter = parseInt(mediaTrashCounter) || 0;
+                }
                 saveDemoDb(db);
                 return NextResponse.json({ success: true });
             }

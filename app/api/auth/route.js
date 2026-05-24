@@ -11,10 +11,10 @@ const DEFAULT_SYSTEM_PROMPT = `Ты — Личный раб Володя, пок
 
 const DEFAULT_DEMO_DB = {
     users: [
-        { id: 'owner-uuid-1111-2222', email: 'owner@moriarty.fam', character_name: 'Moriarty_Boss', static_id: '1', role: 'OWNER', balance: 15250000.00, warns_count: 0, created_at: '2026-04-10T12:00:00Z' },
-        { id: 'dev-uuid-3333-4444', email: 'developer@moriarty.fam', character_name: 'Alex_Moriarty', static_id: '777', role: 'Developer', balance: 5450000.00, warns_count: 0, created_at: '2026-04-12T15:30:00Z' },
-        { id: 'mod-uuid-5555-6666', email: 'moderator@moriarty.fam', character_name: 'Dmitry_Moriarty', static_id: '4452', role: 'MODERATOR', balance: 650000.00, warns_count: 1, created_at: '2026-04-15T18:45:00Z' },
-        { id: 'member-uuid-7777-8888', email: 'member@moriarty.fam', character_name: 'John_Moriarty', static_id: '10245', role: 'MEMBER', balance: 50000.00, warns_count: 0, created_at: '2026-04-17T20:30:00Z' }
+        { id: 'owner-uuid-1111-2222', email: 'owner@moriarty.fam', character_name: 'Moriarty_Boss', static_id: '1', role: 'OWNER', balance: 15250000.00, warns_count: 0, created_at: '2026-04-10T12:00:00Z', is_media: true, media_trash_counter: 12, streamer_settings: { obs_host: "localhost", obs_port: "4455", discord_webhook: "https://discord.com/api/webhooks/mock-id/mock-token", announcement_title: "Апокалипсис в Лос-Сантосе! Мориарти выходит на охоту!", announcement_desc: "Залетайте на стрим! Сегодня чистим город от фриков, берем под полный контроль особняк и раздаем бабло новичкам." } },
+        { id: 'dev-uuid-3333-4444', email: 'developer@moriarty.fam', character_name: 'Alex_Moriarty', static_id: '777', role: 'Developer', balance: 5450000.00, warns_count: 0, created_at: '2026-04-12T15:30:00Z', is_media: true, media_trash_counter: 0, streamer_settings: {} },
+        { id: 'mod-uuid-5555-6666', email: 'moderator@moriarty.fam', character_name: 'Dmitry_Moriarty', static_id: '4452', role: 'MODERATOR', balance: 650000.00, warns_count: 1, created_at: '2026-04-15T18:45:00Z', is_media: false, media_trash_counter: 0, streamer_settings: {} },
+        { id: 'member-uuid-7777-8888', email: 'member@moriarty.fam', character_name: 'John_Moriarty', static_id: '10245', role: 'MEMBER', balance: 50000.00, warns_count: 0, created_at: '2026-04-17T20:30:00Z', is_media: false, media_trash_counter: 0, streamer_settings: {} }
     ],
     warns: [
         { id: 'warn-1', user_id: 'mod-uuid-5555-6666', reason: 'Опоздание на семейный сбор / сбор граффити', issued_by: 'Moriarty_Boss', issued_at: '2026-05-10T21:00:00Z', status: 'ACTIVE' },

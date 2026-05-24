@@ -93,6 +93,7 @@ export default function Home() {
     const [editRole, setEditRole] = useState('MEMBER');
     const [editWarns, setEditWarns] = useState(0);
     const [editBalance, setEditBalance] = useState(0);
+    const [editIsMedia, setEditIsMedia] = useState(false);
     const [systemPrompt, setSystemPrompt] = useState('');
     
     // Mobile navigation state
@@ -958,6 +959,8 @@ export default function Home() {
         setEditRole(u.role);
         setEditWarns(u.warns_count);
         setEditBalance(u.balance);
+        setEditIsMedia(!!u.is_media);
+        setEditIsMedia(!!u.is_media);
         loadSelectedUserWarns(u.id);
     };
 
@@ -979,7 +982,9 @@ export default function Home() {
                     targetUserId: selectedAdminUser.id,
                     role: editRole,
                     warns: parseInt(editWarns),
-                    balance: parseFloat(editBalance)
+                    balance: parseFloat(editBalance),
+                    isMedia: editIsMedia,
+                    isMedia: editIsMedia
                 })
             });
             
@@ -1592,6 +1597,20 @@ export default function Home() {
                                 <span>Настройки</span>
                             </a>
                         </li>
+                        {user && user.is_media && (
+                            <li className="nav-item">
+                                <a 
+                                    className="nav-link"
+                                    href="/streamer-cabinet"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ border: '1px solid rgba(229, 211, 179, 0.3)', background: 'rgba(229, 211, 179, 0.05)', marginTop: '5px' }}
+                                >
+                                    <i className="fa-solid fa-tower-broadcast" style={{ color: 'var(--primary-neon)' }}></i>
+                                    <span style={{ color: 'var(--primary-neon)', fontWeight: '600' }}>Кабинет стримера</span>
+                                </a>
+                            </li>
+                        )}
                     </ul>
                 </div>
 
@@ -2591,7 +2610,22 @@ export default function Home() {
                                                             />
                                                         </div>
 
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 0' }}>
+                                                             <div className="switch-label-wrap">
+                                                                 <span className="switch-title" style={{ fontSize: '0.88rem', fontWeight: '600' }}>Media-статус</span>
+                                                                 <span className="switch-desc" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Дает доступ к Кабинету Стримера</span>
+                                                             </div>
+                                                             <label className="switch">
+                                                                 <input 
+                                                                     type="checkbox" 
+                                                                     checked={editIsMedia} 
+                                                                     onChange={(e) => setEditIsMedia(e.target.checked)} 
+                                                                 />
+                                                                 <span className="slider"></span>
+                                                             </label>
+                                                         </div>
+
+                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                                             <button type="submit" className="btn-primary" disabled={loading}>
                                                                 {loading ? <i className="fa-solid fa-spinner fa-spin"></i> : 'Сохранить изменения'}
                                                             </button>

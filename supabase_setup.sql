@@ -14,8 +14,16 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     warns_count INT NOT NULL DEFAULT 0,
     referred_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    discord JSONB
+    discord JSONB,
+    is_media BOOLEAN NOT NULL DEFAULT FALSE,
+    media_trash_counter INT NOT NULL DEFAULT 0,
+    streamer_settings JSONB DEFAULT '{}'::jsonb
 );
+
+-- Upgrades for existing databases (will run safely if columns exist)
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_media BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS media_trash_counter INT NOT NULL DEFAULT 0;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS streamer_settings JSONB DEFAULT '{}'::jsonb;
 
 -- 2. Create warns table (Character punishments history)
 CREATE TABLE IF NOT EXISTS public.warns (
@@ -80,12 +88,12 @@ VALUES (
 ON CONFLICT (key) DO NOTHING;
 
 -- 7. Seed standard mock accounts for testing (Email logins with VALID HEXADECIMAL UUIDs)
-INSERT INTO public.profiles (id, email, character_name, static_id, role, balance, warns_count)
+INSERT INTO public.profiles (id, email, character_name, static_id, role, balance, warns_count, is_media)
 VALUES 
-  ('11111111-1111-1111-1111-111111111111', 'owner@moriarty.fam', 'Moriarty_Boss', '1', 'OWNER', 15250000.00, 0),
-  ('22222222-2222-2222-2222-222222222222', 'developer@moriarty.fam', 'Alex_Moriarty', '777', 'Developer', 5450000.00, 0),
-  ('33333333-3333-3333-3333-333333333333', 'moderator@moriarty.fam', 'Dmitry_Moriarty', '4452', 'MODERATOR', 650000.00, 1),
-  ('44444444-4444-4444-4444-444444444444', 'member@moriarty.fam', 'John_Moriarty', '10245', 'MEMBER', 50000.00, 0)
+  ('11111111-1111-1111-1111-111111111111', 'owner@moriarty.fam', 'Moriarty_Boss', '1', 'OWNER', 15250000.00, 0, TRUE),
+  ('22222222-2222-2222-2222-222222222222', 'developer@moriarty.fam', 'Alex_Moriarty', '777', 'Developer', 5450000.00, 0, TRUE),
+  ('33333333-3333-3333-3333-333333333333', 'moderator@moriarty.fam', 'Dmitry_Moriarty', '4452', 'MODERATOR', 650000.00, 1, FALSE),
+  ('44444444-4444-4444-4444-444444444444', 'member@moriarty.fam', 'John_Moriarty', '10245', 'MEMBER', 50000.00, 0, FALSE)
 ON CONFLICT (static_id) DO NOTHING;
 
 -- 8. Seed a default warn and complaint (linking to VALID HEXADECIMAL UUIDs)
