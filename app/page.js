@@ -1742,7 +1742,23 @@ export default function Home() {
                         </div>
 
                         <div className="form-group">
-                            <label>Пароль</label>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                <label style={{ margin: 0 }}>Пароль</label>
+                                <a 
+                                    href="/recovery" 
+                                    style={{ 
+                                        fontSize: '0.72rem', 
+                                        color: 'var(--primary-neon)', 
+                                        textDecoration: 'none', 
+                                        fontWeight: '700',
+                                        fontFamily: 'var(--font-mono)',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}
+                                >
+                                    Забыли пароль?
+                                </a>
+                            </div>
                             <input 
                                 type="password" 
                                 className="input-glow" 
