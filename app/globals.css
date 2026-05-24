@@ -2618,3 +2618,200 @@ input:checked + .slider:before {
     }
 }
 
+/* ==========================================================================
+   Account Recovery Wizard Styles - Liquid Glass Extensions
+   ========================================================================== */
+.recovery-wizard-card {
+    transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Specular Border Glows representing Password Strength dynamic states */
+.recovery-wizard-card.strength-weak {
+    border-color: rgba(185, 60, 60, 0.45) !important;
+    box-shadow: 
+        0 30px 60px rgba(185, 60, 60, 0.04),
+        0 0 25px rgba(185, 60, 60, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+.recovery-wizard-card.strength-medium {
+    border-color: rgba(216, 178, 87, 0.45) !important;
+    box-shadow: 
+        0 30px 60px rgba(216, 178, 87, 0.04),
+        0 0 25px rgba(216, 178, 87, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+.recovery-wizard-card.strength-strong {
+    border-color: rgba(30, 107, 62, 0.45) !important;
+    box-shadow: 
+        0 30px 60px rgba(30, 107, 62, 0.04),
+        0 0 25px rgba(30, 107, 62, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Multi-step progress capsule bars */
+.wizard-progress-bar {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 2.2rem;
+    width: 100%;
+}
+
+.wizard-progress-segment {
+    flex: 1;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 10px;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wizard-progress-segment.active {
+    background: var(--primary-neon);
+    box-shadow: 0 1px 4px rgba(179, 154, 116, 0.3);
+}
+
+/* Floating Label Form Fields */
+.floating-label-group {
+    position: relative;
+    margin-bottom: 1.6rem;
+}
+
+.floating-label-group label {
+    position: absolute;
+    top: 50%;
+    left: 16px;
+    transform: translateY(-50%);
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
+    text-transform: none;
+    letter-spacing: 0;
+    font-family: var(--font-main);
+}
+
+.floating-label-group input {
+    width: 100%;
+    height: 52px;
+    padding: 18px 16px 6px !important;
+}
+
+.floating-label-group input:focus ~ label,
+.floating-label-group input:not(:placeholder-shown) ~ label {
+    top: 14px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--primary-neon);
+    font-family: var(--font-mono);
+}
+
+/* Verification OTP digit grid */
+.otp-inputs-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 1.5rem 0 2rem;
+}
+
+.otp-digit-input {
+    flex: 1;
+    height: 58px;
+    max-width: 52px;
+    font-size: 1.6rem !important;
+    text-align: center !important;
+    font-weight: 700 !important;
+    color: var(--text-bright) !important;
+    background: rgba(255, 255, 255, 0.65) !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    border-radius: 12px !important;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.01) !important;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    font-family: var(--font-mono) !important;
+}
+
+.otp-digit-input:focus {
+    background: #FFFFFF !important;
+    border-color: var(--primary-neon) !important;
+    box-shadow: 
+        0 0 0 3px rgba(179, 154, 116, 0.12),
+        0 4px 15px rgba(179, 154, 116, 0.05) !important;
+    transform: translateY(-1px);
+}
+
+/* Password entropy indicator */
+.password-strength-meter-bar {
+    height: 4px;
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 4px;
+    margin-top: 8px;
+    overflow: hidden;
+    position: relative;
+}
+
+.password-strength-fill {
+    height: 100%;
+    width: 0;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    border-radius: 4px;
+}
+
+.password-strength-fill.weak {
+    background-color: #B93C3C;
+    width: 33.33%;
+}
+
+.password-strength-fill.medium {
+    background-color: #D8B257;
+    width: 66.66%;
+}
+
+.password-strength-fill.strong {
+    background-color: #1E6B3E;
+    width: 100%;
+}
+
+/* Alternative actions alignment */
+.alternative-methods-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 1rem;
+}
+
+.btn-alternative-method {
+    background: rgba(0, 0, 0, 0.02);
+    border: 1px solid rgba(0, 0, 0, 0.03);
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 10px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-alternative-method:hover {
+    background: rgba(179, 154, 116, 0.06);
+    border-color: rgba(179, 154, 116, 0.15);
+    color: var(--text-bright);
+}
+
+/* Specific Top-Right fixed Toast position */
+.toast-top-right {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    left: auto;
+    transform: none;
+    align-items: flex-end;
+}
+
+
