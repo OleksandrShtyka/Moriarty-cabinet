@@ -1681,7 +1681,14 @@ export default function Home() {
     if (!user) {
         return (
             <div className="auth-overlay">
-                <div className="auth-card glass-panel glow-purple animate-fade-in">
+                {/* Dynamic animated liquid background blobs */}
+                <div className="auth-liquid-bg">
+                    <div className="auth-blob one"></div>
+                    <div className="auth-blob two"></div>
+                    <div className="auth-blob three"></div>
+                </div>
+
+                <div className="auth-card animate-fade-in">
                     <div className="auth-header">
                         <img 
                             src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=150&q=80" 
