@@ -2536,3 +2536,85 @@ input:checked + .slider:before {
 .btn-discord:active:not(:disabled) {
     transform: translateY(0.5px);
 }
+
+/* ==========================================================================
+   Global Toast Notification System (Liquid Glass & Fixed Top-Center)
+   ========================================================================== */
+.toast-container {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    pointer-events: none;
+    z-index: 9999999;
+}
+
+.toast-item {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.88) !important;
+    backdrop-filter: blur(20px) saturate(145%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(145%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.75) !important;
+    padding: 12px 22px !important;
+    border-radius: 14px !important;
+    box-shadow: 
+        0 15px 35px rgba(0, 0, 0, 0.04),
+        0 1px 3px rgba(0, 0, 0, 0.008),
+        inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+    color: var(--text-bright) !important;
+    font-size: 0.84rem !important;
+    font-weight: 600 !important;
+    min-width: 280px;
+    max-width: 480px;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    animation: toastSlideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.toast-item.success {
+    border-left: 4px solid #1E6B3E !important;
+}
+.toast-item.success i {
+    color: #1E6B3E !important;
+}
+
+.toast-item.error {
+    border-left: 4px solid #B93C3C !important;
+}
+.toast-item.error i {
+    color: #B93C3C !important;
+}
+
+.toast-item.info {
+    border-left: 4px solid var(--primary-neon) !important;
+}
+.toast-item.info i {
+    color: var(--primary-neon) !important;
+}
+
+.toast-item i {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+}
+
+.toast-item span {
+    line-height: 1.4;
+}
+
+@keyframes toastSlideDown {
+    0% {
+        opacity: 0;
+        transform: translateY(-24px) scale(0.94);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
