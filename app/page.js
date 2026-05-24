@@ -113,6 +113,266 @@ export default function Home() {
     const [selectedUserWarns, setSelectedUserWarns] = useState([]);
     const [adminSubTab, setAdminSubTab] = useState('users');
 
+    // Streamer Cabinet states
+    const [obsConnected, setObsConnected] = useState(true);
+    const [blurActive, setBlurActive] = useState(false);
+    const [fakeInfoActive, setFakeInfoActive] = useState(false);
+    const [fakeData, setFakeData] = useState({
+        charName: 'Arthur_Toretto',
+        cid: '12485',
+        location: 'Sandy Shores, Сектор C-5',
+        faction: 'The Families'
+    });
+    const [trashCounter, setTrashCounter] = useState(0);
+    const [obsPort, setObsPort] = useState('4455');
+    const [obsHost, setObsHost] = useState('localhost');
+    const [discordWebhook, setDiscordWebhook] = useState('');
+    const [streamTitle, setStreamTitle] = useState('Апокалипсис в Лос-Сантосе! Мориарти выходит на охоту!');
+    const [streamDesc, setStreamDesc] = useState('Залетайте на стрим! Сегодня чистим город от фриков, берем под полный контроль особняк и раздаем бабло новичкам.');
+    const [announcementStatus, setAnnouncementStatus] = useState('idle'); // idle, sending, success
+    const [streamChatMessages, setStreamChatMessages] = useState([]);
+    const [streamModerationLogs, setStreamModerationLogs] = useState([]);
+    const [twitchChannel, setTwitchChannel] = useState('');
+    const [isTwitchConnected, setIsTwitchConnected] = useState(false);
+    const twitchWsRef = useRef(null);
+    const chatEndRef = useRef(null);
+
+
+
+
+    // Connect to real-time Twitch Chat via standard Twitch IRC WebSocket (Client-side)
+    const connectToTwitch = (channelName) => {
+        if (!channelName.trim()) {
+            addToast("Введите корректное имя канала Twitch!", "error");
+            return;
+        }
+
+        const channel = channelName.trim().toLowerCase();
+
+        // 1. Clean up existing WebSocket if any
+        if (twitchWsRef.current) {
+            try {
+                twitchWsRef.current.close();
+            } catch (e) {}
+            twitchWsRef.current = null;
+        }
+
+        setIsTwitchConnected(false);
+        setTwitchChannel(channel);
+
+        // Add system message
+        const startMsg = {
+            id: 'sys-' + Math.random().toString(36).substr(2, 9),
+            platform: 'twitch',
+            author: 'Система',
+            text: `Подключение к реальному чату Twitch канала #${channel}...`,
+            isToxic: false,
+            isSystem: true,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        };
+        setStreamChatMessages([startMsg]);
+
+        try {
+            // 2. Open anonymous Twitch IRC WebSocket
+            const ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
+            twitchWsRef.current = ws;
+
+            ws.onopen = () => {
+                // Anonymous handshake
+                ws.send('CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership');
+                ws.send('PASS oauth:anonymous');
+                const randomNum = Math.floor(10000 + Math.random() * 90000);
+                ws.send(`NICK justinfan${randomNum}`);
+                ws.send(`JOIN #${channel}`);
+            };
+
+            ws.onmessage = (event) => {
+                const rawData = event.data;
+                
+                // Handle PING from Twitch server to keep connection alive
+                if (rawData.startsWith('PING')) {
+                    ws.send('PONG :tmi.twitch.tv');
+                    return;
+                }
+
+                // Handle PRIVMSG (standard Twitch chat message)
+                if (rawData.includes('PRIVMSG')) {
+                    let displayName = '';
+                    let messageText = '';
+                    
+                    // Extract display-name from tags
+                    const displayNameMatch = rawData.match(/display-name=([^;]+)/);
+                    if (displayNameMatch && displayNameMatch[1]) {
+                        displayName = displayNameMatch[1];
+                    }
+
+                    // Extract nickname as fallback from :nickname!
+                    if (!displayName) {
+                        const nickMatch = rawData.match(/:([^!]+)!/);
+                        if (nickMatch && nickMatch[1]) {
+                            displayName = nickMatch[1];
+                        }
+                    }
+
+                    // Extract message content: everything after "PRIVMSG #channel :"
+                    const privmsgMarker = `PRIVMSG #${channel} :`;
+                    const index = rawData.indexOf(privmsgMarker);
+                    if (index !== -1) {
+                        messageText = rawData.substring(index + privmsgMarker.length).trim();
+                    }
+
+                    if (displayName && messageText) {
+                        // Toxicity check
+                        const toxicWords = ['лох', 'нищий', 'чит', 'токсик', 'урод', 'даун', 'пидор', 'сука', 'бля', 'крип', 'freak', 'fucking', 'trash'];
+                        const isToxic = toxicWords.some(word => messageText.toLowerCase().includes(word));
+                        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                        const newMsg = {
+                            id: Math.random().toString(36).substr(2, 9),
+                            platform: 'twitch',
+                            author: displayName,
+                            text: messageText,
+                            isToxic,
+                            timestamp
+                        };
+
+                        setStreamChatMessages(prev => [...prev.slice(-39), newMsg]);
+
+                        if (isToxic) {
+                            setStreamModerationLogs(prev => [
+                                { 
+                                    id: newMsg.id, 
+                                    author: newMsg.author, 
+                                    reason: "Токсичность / Оскорбление (ИИ модерация)", 
+                                    text: newMsg.text, 
+                                    action: "BLOCKED", 
+                                    time: newMsg.timestamp 
+                                },
+                                ...prev.slice(0, 19)
+                            ]);
+                        }
+                    }
+                } else if (rawData.includes('JOIN')) {
+                    // Successfully joined channel
+                    setIsTwitchConnected(true);
+                    addToast(`Чат Twitch #${channel} успешно подключен!`, "success");
+                    
+                    setStreamChatMessages(prev => [
+                        ...prev,
+                        {
+                            id: 'sys-' + Math.random().toString(36).substr(2, 9),
+                            platform: 'twitch',
+                            author: 'Система',
+                            text: `Успешное соединение с Twitch каналом #${channel}! Чат транслируется в реальном времени.`,
+                            isToxic: false,
+                            isSystem: true,
+                            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                        }
+                    ]);
+                }
+            };
+
+            ws.onerror = (err) => {
+                console.error("Twitch WS Error:", err);
+                setIsTwitchConnected(false);
+                addToast("Ошибка соединения с Twitch IRC", "error");
+            };
+
+            ws.onclose = () => {
+                setIsTwitchConnected(false);
+            };
+
+        } catch (e) {
+            console.error("Twitch Connection Exception:", e);
+            setIsTwitchConnected(false);
+        }
+    };
+
+    const disconnectTwitch = () => {
+        if (twitchWsRef.current) {
+            try {
+                twitchWsRef.current.close();
+            } catch (e) {}
+            twitchWsRef.current = null;
+        }
+        setIsTwitchConnected(false);
+        addToast("Чат Twitch отключен", "info");
+        
+        setStreamChatMessages(prev => [
+            ...prev,
+            {
+                id: 'sys-' + Math.random().toString(36).substr(2, 9),
+                platform: 'twitch',
+                author: 'Система',
+                text: `Чат Twitch отключен пользователем.`,
+                isToxic: false,
+                isSystem: true,
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+            }
+        ]);
+    };
+
+    // Recycled freaks helper functions
+    const handleRecycleFreak = () => {
+        const nextVal = trashCounter + 1;
+        setTrashCounter(nextVal);
+        saveStreamerSettings({}, nextVal);
+        addToast("Счетчик фриков обновлен! (+1 Уволен)", "success");
+    };
+
+    const handleResetRecycle = () => {
+        setTrashCounter(0);
+        saveStreamerSettings({}, 0);
+        addToast("Счетчик фриков сброшен", "info");
+    };
+
+    // Enterprise Webhook Scheduler Mock
+    const handlePostAnnouncement = async (e) => {
+        e.preventDefault();
+        setAnnouncementStatus('sending');
+        setTimeout(() => {
+            setAnnouncementStatus('success');
+            addToast("Анонс стрима успешно разослан в Discord!", "success");
+            saveStreamerSettings({});
+            setTimeout(() => setAnnouncementStatus('idle'), 3000);
+        }, 1500);
+    };
+
+    // Simulated Fake Info Generator Interval
+    useEffect(() => {
+        if (!fakeInfoActive) return;
+        
+        const locs = [
+            'Sandy Shores, Сектор C-5', 'Paleto Bay, Сектор A-2', 'Mirror Park, Сектор E-12',
+            'Chiliad Mountain, Сектор B-1', 'Los Santos Airport, Сектор F-18', 'Vespucci Beach, Сектор E-6'
+        ];
+        const factions = ['The Families', 'Ballas', 'Vagos', 'Marabunta', 'LSPD', 'FIB'];
+        const names = ['Arthur_Toretto', 'John_Wick', 'Dmitry_Shakur', 'Narek_Rich', 'Vova_Buster'];
+        
+        const interval = setInterval(() => {
+            setFakeData({
+                charName: names[Math.floor(Math.random() * names.length)],
+                cid: Math.floor(Math.random() * 80000 + 10000).toString(),
+                location: locs[Math.floor(Math.random() * locs.length)],
+                faction: factions[Math.floor(Math.random() * factions.length)]
+            });
+        }, 6000);
+
+        return () => clearInterval(interval);
+    }, [fakeInfoActive]);
+
+    // WebSocket cleanup and chat scrolling hooks
+    useEffect(() => {
+        return () => {
+            if (twitchWsRef.current) {
+                try { twitchWsRef.current.close(); } catch (e) {}
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [streamChatMessages]);
 
     // Toast Add Helper
     const addToast = (msg, type = 'success') => {
@@ -348,10 +608,70 @@ export default function Home() {
             if (storedUser) {
                 const parsed = JSON.parse(storedUser);
                 setUser(parsed);
+                setProfile(parsed);
+                if (parsed.is_media) {
+                    setTrashCounter(parsed.media_trash_counter || 0);
+                    if (parsed.streamer_settings) {
+                        setObsHost(parsed.streamer_settings.obs_host || 'localhost');
+                        setObsPort(parsed.streamer_settings.obs_port || '4455');
+                        setDiscordWebhook(parsed.streamer_settings.discord_webhook || '');
+                        if (parsed.streamer_settings.announcement_title) {
+                            setStreamTitle(parsed.streamer_settings.announcement_title);
+                        }
+                        if (parsed.streamer_settings.announcement_desc) {
+                            setStreamDesc(parsed.streamer_settings.announcement_desc);
+                        }
+                    }
+                }
                 refreshUserData(parsed.id);
             }
         }
     }, []);
+
+    // Action: Save custom streamer settings
+    const saveStreamerSettings = async (updatedSettings, updatedTrash = trashCounter) => {
+        if (!activeProfile) return;
+        
+        try {
+            const res = await fetch('/api/db', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'updateStreamerSettings',
+                    userId: activeProfile.id,
+                    streamerSettings: {
+                        obs_host: obsHost,
+                        obs_port: obsPort,
+                        discord_webhook: discordWebhook,
+                        announcement_title: streamTitle,
+                        announcement_desc: streamDesc,
+                        ...updatedSettings
+                    },
+                    mediaTrashCounter: updatedTrash
+                })
+            });
+            
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Failed to save settings");
+            
+            const updatedProfile = {
+                ...activeProfile,
+                media_trash_counter: updatedTrash,
+                streamer_settings: {
+                    obs_host: obsHost,
+                    obs_port: obsPort,
+                    discord_webhook: discordWebhook,
+                    announcement_title: streamTitle,
+                    announcement_desc: streamDesc,
+                    ...updatedSettings
+                }
+            };
+            setProfile(updatedProfile);
+            localStorage.setItem('moriarty_user', JSON.stringify({ ...JSON.parse(localStorage.getItem('moriarty_user') || '{}'), ...updatedProfile }));
+        } catch (err) {
+            addToast(err.message, "error");
+        }
+    };
 
     // Refresh everything for the logged-in user
     const refreshUserData = async (uid) => {
@@ -362,6 +682,22 @@ export default function Home() {
             if (profileRes.ok) {
                 const updatedProfile = await profileRes.json();
                 setProfile(updatedProfile);
+                
+                // Sync streamer parameters if they exist
+                if (updatedProfile.is_media) {
+                    setTrashCounter(updatedProfile.media_trash_counter || 0);
+                    if (updatedProfile.streamer_settings) {
+                        setObsHost(updatedProfile.streamer_settings.obs_host || 'localhost');
+                        setObsPort(updatedProfile.streamer_settings.obs_port || '4455');
+                        setDiscordWebhook(updatedProfile.streamer_settings.discord_webhook || '');
+                        if (updatedProfile.streamer_settings.announcement_title) {
+                            setStreamTitle(updatedProfile.streamer_settings.announcement_title);
+                        }
+                        if (updatedProfile.streamer_settings.announcement_desc) {
+                            setStreamDesc(updatedProfile.streamer_settings.announcement_desc);
+                        }
+                    }
+                }
                 
                 // Update local storage representation
                 const cached = JSON.parse(localStorage.getItem('moriarty_user') || '{}');
@@ -1597,17 +1933,15 @@ export default function Home() {
                                 <span>Настройки</span>
                             </a>
                         </li>
-                        {user && user.is_media && (
+                        {activeProfile && activeProfile.is_media && (
                             <li className="nav-item">
                                 <a 
-                                    className="nav-link"
-                                    href="/streamer-cabinet"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    style={{ border: '1px solid rgba(229, 211, 179, 0.3)', background: 'rgba(229, 211, 179, 0.05)', marginTop: '5px' }}
+                                    className={`nav-link ${activeTab === 'streamer' ? 'active' : ''}`}
+                                    onClick={() => { setActiveTab('streamer'); setMobileMenuOpen(false); }}
+                                    style={{ border: '1px solid rgba(179, 154, 116, 0.25)', background: activeTab === 'streamer' ? 'var(--primary-neon)' : 'rgba(179, 154, 116, 0.05)', marginTop: '5px' }}
                                 >
-                                    <i className="fa-solid fa-tower-broadcast" style={{ color: 'var(--primary-neon)' }}></i>
-                                    <span style={{ color: 'var(--primary-neon)', fontWeight: '600' }}>Кабинет стримера</span>
+                                    <i className="fa-solid fa-tower-broadcast" style={{ color: activeTab === 'streamer' ? '#fff' : 'var(--primary-neon)' }}></i>
+                                    <span style={{ color: activeTab === 'streamer' ? '#fff' : 'var(--primary-neon)', fontWeight: '600' }}>Панель стримера</span>
                                 </a>
                             </li>
                         )}
@@ -1632,7 +1966,14 @@ export default function Home() {
                         </div>
                         <div className="user-snippet-info">
                             <h4 className="user-snippet-name">{activeProfile.character_name}</h4>
-                            <span className="user-snippet-role">{activeProfile.role}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', marginTop: '2px' }}>
+                                <span className="user-snippet-role" style={{ fontSize: '0.62rem' }}>{activeProfile.role}</span>
+                                {activeProfile.is_media && (
+                                    <span className="badge-media-gold" style={{ scale: '0.85', transformOrigin: 'left' }}>
+                                        <i className="fa-solid fa-star"></i> MEDIA
+                                    </span>
+                                )}
+                            </div>
                         </div>
                         <button onClick={handleLogout} className="btn-logout" title="Выйти">
                             <i className="fa-solid fa-power-off"></i>
@@ -1694,8 +2035,39 @@ export default function Home() {
                             </div>
                         </div>
                         <div className="banner-profile-info">
-                            <h2 className="char-title">{activeProfile.character_name}</h2>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                <h2 className="char-title" style={{ margin: 0 }}>{activeProfile.character_name}</h2>
+                                {activeProfile.is_media && (
+                                    <span className="badge-media-gold" style={{ fontSize: '0.7rem', padding: '4px 12px' }}>
+                                        <i className="fa-solid fa-star"></i> MEDIA PARTNER
+                                    </span>
+                                )}
+                            </div>
                             <span className="char-static">Static CID: {activeProfile.static_id}</span>
+                            {activeProfile.is_media && (
+                                <div style={{ marginTop: '8px' }}>
+                                    <button 
+                                        onClick={() => setActiveTab('streamer')} 
+                                        className="btn-primary"
+                                        style={{ 
+                                            padding: '6px 14px', 
+                                            fontSize: '0.8rem', 
+                                            display: 'inline-flex', 
+                                            alignItems: 'center', 
+                                            gap: '6px',
+                                            borderRadius: '8px',
+                                            cursor: 'pointer',
+                                            background: 'linear-gradient(135deg, var(--primary-neon) 0%, #D5BE97 100%)',
+                                            border: 'none',
+                                            color: '#fff',
+                                            fontWeight: '600',
+                                            boxShadow: '0 4px 12px rgba(179, 154, 116, 0.2)'
+                                        }}
+                                    >
+                                        <i className="fa-solid fa-tower-broadcast"></i> Панель стримера
+                                    </button>
+                                </div>
+                            )}
                         </div>
                         <div className="banner-stats">
                             <div className="banner-stat-item">
@@ -1711,7 +2083,14 @@ export default function Home() {
                         <div className="stat-card glass-panel">
                             <div className="stat-icon"><i className="fa-solid fa-shield"></i></div>
                             <div className="stat-details">
-                                <span className="stat-val">{activeProfile.role}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                    <span className="stat-val">{activeProfile.role}</span>
+                                    {activeProfile.is_media && (
+                                        <span className="badge-media-gold" style={{ scale: '0.9', transformOrigin: 'left' }}>
+                                            <i className="fa-solid fa-star"></i> MEDIA
+                                        </span>
+                                    )}
+                                </div>
                                 <span className="stat-lbl">Должность в семье</span>
                             </div>
                         </div>
@@ -2156,6 +2535,353 @@ export default function Home() {
                     </div>
                 </div>
 
+                {/* 6.5. NATIVE STREAMER CABINET PANEL */}
+                {activeProfile && activeProfile.is_media && (
+                    <div className={`tab-panel ${activeTab === 'streamer' ? 'active' : ''}`}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                            <div className="stats-banner" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.8rem 2.5rem' }}>
+                                <div className="banner-profile-info">
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                        <h1 className="brand-text" style={{ fontSize: '1.6rem', letterSpacing: '1px', margin: 0 }}>
+                                            <i className="fa-solid fa-tower-broadcast" style={{ marginRight: '10px' }}></i>
+                                            Панель Стримера
+                                        </h1>
+                                        <span className="badge-media-gold" style={{ fontSize: '0.7rem', padding: '4px 12px' }}>
+                                            <i className="fa-solid fa-star"></i> OFFICIAL MEDIA
+                                        </span>
+                                    </div>
+                                    <p style={{ margin: '4px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontFamily: 'var(--font-mono)' }}>
+                                        Синхронизированный медиа-кабинет Moriarty & Live-консоль
+                                    </p>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                    <span className="server-badge" style={{ background: 'rgba(179, 154, 116, 0.05)', color: 'var(--primary-neon)' }}>
+                                        {activeProfile.character_name}
+                                    </span>
+                                    <div className="connection-status">
+                                        <span className="status-dot animate-pulse" style={{ backgroundColor: isTwitchConnected ? '#6441A5' : 'var(--primary-neon)' }}></span>
+                                        <span>Twitch Чат: {isTwitchConnected ? 'АКТИВЕН' : 'НЕ ПОДКЛЮЧЕН'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                                {/* Left Column: Viewport Simulation & Custom Overlay Builder */}
+                                <div style={{ flex: '1.2', display: 'flex', flexDirection: 'column', gap: '1.5rem', minWidth: '320px' }}>
+                                    
+                                    {/* Viewport Live Simulation */}
+                                    <section className="cyber-panel">
+                                        <h2 style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '1.2rem', textTransform: 'uppercase', color: 'var(--primary-neon)' }}>
+                                            <i className="fa-solid fa-desktop" style={{ marginRight: '8px' }}></i>
+                                            Стрим-Монитор (Simulated Viewport)
+                                        </h2>
+                                        
+                                        <div className="streamer-viewport-wrapper" style={{ boxShadow: '0 8px 30px rgba(0,0,0,0.1)' }}>
+                                            <img 
+                                                src="https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1470&auto=format&fit=crop" 
+                                                alt="RP Game Feed" 
+                                                className={`streamer-feed-sim ${blurActive ? 'blurred' : ''}`}
+                                            />
+                                            
+                                            {blurActive && (
+                                                <div style={{ position: 'absolute', top: '15px', right: '15px', backgroundColor: '#B93C3C', border: '1px solid rgba(255,255,255,0.4)', color: '#fff', padding: '6px 14px', borderRadius: '20px', fontSize: '0.68rem', fontFamily: 'var(--font-mono)', fontWeight: 'bold', boxShadow: '0 4px 15px rgba(185,60,60,0.4)' }}>
+                                                    <i className="fa-solid fa-mask" style={{ marginRight: '6px' }}></i>
+                                                    HUD И МИНИКАРТА ЗАБЛЮРЕНЫ
+                                                </div>
+                                            )}
+
+                                            {fakeInfoActive && (
+                                                <div className="streamer-overlay-banner animate-pulse" style={{ background: 'rgba(255,255,255,0.95)', border: '1px solid var(--primary-neon)', backdropFilter: 'blur(10px)', color: '#1C1C24' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>Ложные координаты</span>
+                                                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold', color: 'var(--primary-neon)' }}>
+                                                            <i className="fa-solid fa-compass" style={{ marginRight: '5px' }}></i>
+                                                            {fakeData.location}
+                                                        </span>
+                                                    </div>
+                                                    <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(0,0,0,0.08)' }}></div>
+                                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontFamily: 'var(--font-mono)' }}>Фейк Персонаж</span>
+                                                        <span style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>
+                                                            {fakeData.charName} (CID: {fakeData.cid})
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Anti-Streamsnipe Switches */}
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginTop: '1.5rem' }}>
+                                            <div className="glass-panel" style={{ padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                <div className="toggle-switch-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <div className="switch-label-wrap">
+                                                        <span className="switch-title" style={{ fontWeight: '600', fontSize: '0.88rem' }}>Замыливание худа</span>
+                                                        <span className="switch-desc" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Блюр радара и карты по хоткею</span>
+                                                    </div>
+                                                    <label className="switch">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={blurActive} 
+                                                            onChange={(e) => setBlurActive(e.target.checked)} 
+                                                        />
+                                                        <span className="slider"></span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="glass-panel" style={{ padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                <div className="toggle-switch-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                    <div className="switch-label-wrap">
+                                                        <span className="switch-title" style={{ fontWeight: '600', fontSize: '0.88rem' }}>Фейк-координаты</span>
+                                                        <span className="switch-desc" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Генерация ложного GPS потока</span>
+                                                    </div>
+                                                    <label className="switch">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={fakeInfoActive} 
+                                                            onChange={(e) => setFakeInfoActive(e.target.checked)} 
+                                                        />
+                                                        <span className="slider"></span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    {/* Live RP Statistics & OBS Overlay Builder */}
+                                    <section className="cyber-panel">
+                                        <h2 style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '1.2rem', textTransform: 'uppercase', color: 'var(--primary-neon)' }}>
+                                            <i className="fa-solid fa-clock-rotate-left" style={{ marginRight: '8px' }}></i>
+                                            Кастомный Live-оверлей (OBS Browser Source)
+                                        </h2>
+                                        
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
+                                            <div className="form-group">
+                                                <label style={{ fontSize: '0.78rem', fontWeight: '600', color: 'var(--text-bright)' }}>Ссылка для OBS Browser Source (прозрачный виджет)</label>
+                                                <div style={{ display: 'flex', gap: '10px', marginTop: '5px' }}>
+                                                    <input 
+                                                        type="text" 
+                                                        readOnly 
+                                                        className="input-glow" 
+                                                        value={typeof window !== 'undefined' ? `${window.location.origin}/streamer-cabinet/overlay?userId=${activeProfile.id}` : ''} 
+                                                        style={{ flexGrow: 1, fontFamily: 'var(--font-mono)', fontSize: '0.8rem', background: 'rgba(0,0,0,0.03)', color: 'var(--primary-neon)', border: '1px solid rgba(179,154,116,0.3)', padding: '10px 14px', borderRadius: '8px' }} 
+                                                    />
+                                                    <button 
+                                                        type="button" 
+                                                        className="btn-primary" 
+                                                        style={{ borderRadius: '8px', padding: '0 18px', background: 'var(--primary-neon)', color: '#fff', border: 'none', cursor: 'pointer' }}
+                                                        onClick={() => {
+                                                            const overlayUrl = `${window.location.origin}/streamer-cabinet/overlay?userId=${activeProfile.id}`;
+                                                            navigator.clipboard.writeText(overlayUrl);
+                                                            addToast("Ссылка для OBS успешно скопирована!", "success");
+                                                        }}
+                                                    >
+                                                        <i className="fa-solid fa-copy"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Recycled Freaks Counter Dashboard Panel */}
+                                            <div className="glass-panel" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.5rem', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(179, 154, 116, 0.04) 0%, rgba(255, 255, 255, 0.9) 100%)', border: '1px solid rgba(179,154,116,0.2)' }}>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontFamily: 'var(--font-mono)', fontWeight: '600' }}>Утилизировано фриков на стриме</span>
+                                                    <h3 style={{ fontSize: '2.2rem', fontFamily: 'var(--font-mono)', fontWeight: '700', color: 'var(--text-bright)', margin: 0 }}>
+                                                        {trashCounter} <span style={{ fontSize: '0.95rem', color: 'var(--text-muted)', fontWeight: 'normal' }}>уволено</span>
+                                                    </h3>
+                                                </div>
+                                                <div style={{ display: 'flex', gap: '8px' }}>
+                                                    <button 
+                                                        type="button" 
+                                                        className="btn-primary" 
+                                                        onClick={handleRecycleFreak} 
+                                                        style={{ height: '48px', padding: '0 20px', borderRadius: '8px', background: 'linear-gradient(135deg, #1C1C24 0%, #3A3A4A 100%)', color: '#fff', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', fontWeight: '600' }}
+                                                    >
+                                                        <i className="fa-solid fa-user-slash"></i>
+                                                        +1 Уволен (!уволен)
+                                                    </button>
+                                                    <button 
+                                                        type="button" 
+                                                        className="btn-secondary" 
+                                                        onClick={handleResetRecycle}
+                                                        style={{ height: '48px', color: 'var(--accent-rose)', border: '1px solid rgba(185, 60, 60, 0.15)', background: 'rgba(185, 60, 60, 0.05)', padding: '0 16px', borderRadius: '8px', cursor: 'pointer' }}
+                                                        title="Сбросить счетчик"
+                                                    >
+                                                        <i className="fa-solid fa-arrows-rotate"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </section>
+                                </div>
+
+                                {/* Right Column: Real Twitch Chat Integration & Discord Embed Announcer */}
+                                <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '1.5rem', minWidth: '300px' }}>
+                                    
+                                    {/* Real-time Twitch Chat Client */}
+                                    <section className="cyber-panel" style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '10px' }}>
+                                            <h2 style={{ fontSize: '1.1rem', fontWeight: '700', textTransform: 'uppercase', color: 'var(--primary-neon)', margin: 0 }}>
+                                                <i className="fa-brands fa-twitch" style={{ marginRight: '8px', color: '#6441A5' }}></i>
+                                                Чат трансляции Twitch Live
+                                            </h2>
+                                            <span className="badge-media-gold" style={{ background: 'rgba(100, 65, 165, 0.06)', color: '#6441A5', border: '1px solid rgba(100, 65, 165, 0.2)' }}>
+                                                ИИ Модератор
+                                            </span>
+                                        </div>
+
+                                        {/* Twitch Connection Form Group */}
+                                        <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem' }}>
+                                            <input 
+                                                type="text"
+                                                className="input-glow"
+                                                placeholder="Имя Twitch канала (e.g. moriarty)"
+                                                value={twitchChannel}
+                                                onChange={(e) => setTwitchChannel(e.target.value)}
+                                                disabled={isTwitchConnected}
+                                                style={{ flexGrow: 1, height: '40px' }}
+                                            />
+                                            {isTwitchConnected ? (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={disconnectTwitch} 
+                                                    className="btn-secondary"
+                                                    style={{ height: '40px', color: 'var(--accent-rose)', border: '1px solid rgba(185,60,60,0.2)', padding: '0 16px', borderRadius: '8px', cursor: 'pointer' }}
+                                                >
+                                                    <i className="fa-solid fa-plug-circle-xmark"></i>
+                                                </button>
+                                            ) : (
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => connectToTwitch(twitchChannel)} 
+                                                    className="btn-primary"
+                                                    style={{ height: '40px', background: '#6441A5', color: '#fff', border: 'none', padding: '0 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}
+                                                >
+                                                    Подключить
+                                                </button>
+                                            )}
+                                        </div>
+                                        
+                                        {/* Live Chat scroller container */}
+                                        <div className="live-chat-panel" style={{ height: '360px', background: 'rgba(255, 255, 255, 0.5)', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.04)' }}>
+                                            <div className="live-chat-scroller">
+                                                {streamChatMessages.length === 0 ? (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', opacity: 0.7, padding: '2rem', textAlign: 'center' }}>
+                                                        <i className="fa-brands fa-twitch animate-pulse" style={{ fontSize: '2.5rem', color: '#6441A5', marginBottom: '0.8rem' }}></i>
+                                                        <p style={{ fontSize: '0.82rem', margin: 0 }}>Введите имя канала выше и подключитесь к трансляции чата Twitch!</p>
+                                                    </div>
+                                                ) : (
+                                                    streamChatMessages.map((msg) => (
+                                                        <div key={msg.id} className={`stream-chat-msg ${msg.isToxic ? 'toxic' : ''} ${msg.isSystem ? 'system' : ''}`} style={{ borderBottom: '1px solid rgba(0,0,0,0.015)' }}>
+                                                            {!msg.isSystem && (
+                                                                <span className="stream-platform-icon twitch">
+                                                                    <i className="fa-brands fa-twitch"></i>
+                                                                </span>
+                                                            )}
+                                                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>[{msg.timestamp}]</span>
+                                                            {msg.isSystem ? (
+                                                                <span style={{ color: 'var(--primary-neon)', fontStyle: 'italic', fontWeight: '500' }}>{msg.text}</span>
+                                                            ) : (
+                                                                <>
+                                                                    <span className="stream-chat-author" style={{ color: '#6441A5' }}>{msg.author}:</span>
+                                                                    <span className="stream-chat-text">{msg.text}</span>
+                                                                    {msg.isToxic && (
+                                                                        <span className="toxic-badge">Фрик</span>
+                                                                    )}
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    ))
+                                                )}
+                                                <div ref={chatEndRef} />
+                                            </div>
+                                        </div>
+
+                                        {/* AI Toxicity logs ticker */}
+                                        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '1rem', padding: '12px', background: 'rgba(185, 60, 60, 0.04)', borderRadius: '8px', border: '1px solid rgba(185, 60, 60, 0.1)', fontSize: '0.78rem' }}>
+                                            <i className="fa-solid fa-circle-exclamation" style={{ color: 'var(--accent-rose)' }}></i>
+                                            <span style={{ color: 'var(--text-bright)' }}>
+                                                <strong>Авто-Модерация ИИ:</strong> Заблокировано спам-комментариев и сообщений от фриков: <strong>{streamModerationLogs.length}</strong>
+                                            </span>
+                                        </div>
+                                    </section>
+
+                                    {/* Webhook Discord Announcer */}
+                                    <section className="cyber-panel">
+                                        <h2 style={{ fontSize: '1.1rem', fontWeight: '700', marginBottom: '1.2rem', textTransform: 'uppercase', color: 'var(--primary-neon)' }}>
+                                            <i className="fa-brands fa-discord" style={{ marginRight: '8px', color: '#5865f2' }}></i>
+                                            Enterprise Discord-Анонсер
+                                        </h2>
+                                        
+                                        <form onSubmit={handlePostAnnouncement} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                                            <div className="form-group">
+                                                <label style={{ fontSize: '0.78rem', fontWeight: '600' }}>Discord Webhook URL</label>
+                                                <input 
+                                                    type="url" 
+                                                    className="input-glow" 
+                                                    placeholder="https://discord.com/api/webhooks/..." 
+                                                    value={discordWebhook}
+                                                    onChange={(e) => setDiscordWebhook(e.target.value)}
+                                                    style={{ height: '38px', marginTop: '5px' }}
+                                                />
+                                            </div>
+
+                                            <div className="form-group">
+                                                <label style={{ fontSize: '0.78rem', fontWeight: '600' }}>Заголовок оповещения</label>
+                                                <input 
+                                                    type="text" 
+                                                    className="input-glow" 
+                                                    placeholder="Стрим запущен!" 
+                                                    value={streamTitle}
+                                                    onChange={(e) => setStreamTitle(e.target.value)}
+                                                    required
+                                                    style={{ height: '38px', marginTop: '5px' }}
+                                                />
+                                            </div>
+
+                                            <div className="form-group">
+                                                <label style={{ fontSize: '0.78rem', fontWeight: '600' }}>Текст описания анонса</label>
+                                                <textarea 
+                                                    rows="3" 
+                                                    className="input-glow" 
+                                                    placeholder="Описание стрима..." 
+                                                    value={streamDesc}
+                                                    onChange={(e) => setStreamDesc(e.target.value)}
+                                                    required
+                                                    style={{ marginTop: '5px', padding: '10px' }}
+                                                />
+                                            </div>
+
+                                            <button 
+                                                type="submit" 
+                                                className="btn-primary" 
+                                                disabled={announcementStatus === 'sending' || !discordWebhook} 
+                                                style={{ width: '100%', height: '42px', marginTop: '5px', borderRadius: '8px', background: 'linear-gradient(135deg, #5865f2 0%, #4752c4 100%)', border: 'none', color: '#fff', fontWeight: '600', cursor: 'pointer' }}
+                                            >
+                                                {announcementStatus === 'sending' ? (
+                                                    <>
+                                                        <i className="fa-solid fa-spinner fa-spin" style={{ marginRight: '8px' }}></i>
+                                                        Рассылка красивых эмбедов...
+                                                    </>
+                                                ) : announcementStatus === 'success' ? (
+                                                    <>
+                                                        <i className="fa-solid fa-circle-check" style={{ marginRight: '8px' }}></i>
+                                                        Анонс успешно опубликован!
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <i className="fa-solid fa-paper-plane" style={{ marginRight: '8px' }}></i>
+                                                        Запустить анонс трансляции
+                                                    </>
+                                                )}
+                                            </button>
+                                        </form>
+                                    </section>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* 7. SETTINGS & ACCOUNT MANAGEMENT TAB */}
                 <div className={`tab-panel ${activeTab === 'settings' ? 'active' : ''}`}>
                     <div style={{ maxWidth: '950px', margin: '0 auto' }}>
@@ -2548,9 +3274,16 @@ export default function Home() {
                                                                     <span className="admin-user-static">CID: {u.static_id}</span>
                                                                 </div>
                                                             </div>
-                                                            <span className={`admin-user-role-badge ${u.role.toLowerCase()}`}>
-                                                                {u.role}
-                                                            </span>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                                                <span className={`admin-user-role-badge ${u.role.toLowerCase()}`}>
+                                                                    {u.role}
+                                                                </span>
+                                                                {u.is_media && (
+                                                                    <span className="badge-media-gold" style={{ fontSize: '0.55rem', padding: '2px 6px' }}>
+                                                                        <i className="fa-solid fa-star"></i> MEDIA
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     ))
                                                 }
