@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 
 export default function Home() {
     // Auth & Navigation states
@@ -1744,20 +1745,12 @@ export default function Home() {
                         <div className="form-group">
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
                                 <label style={{ margin: 0 }}>Пароль</label>
-                                <a 
+                                <Link 
                                     href="/recovery" 
-                                    style={{ 
-                                        fontSize: '0.72rem', 
-                                        color: 'var(--primary-neon)', 
-                                        textDecoration: 'none', 
-                                        fontWeight: '700',
-                                        fontFamily: 'var(--font-mono)',
-                                        textTransform: 'uppercase',
-                                        letterSpacing: '0.5px'
-                                    }}
+                                    className="auth-forgot-password-link"
                                 >
                                     Забыли пароль?
-                                </a>
+                                </Link>
                             </div>
                             <input 
                                 type="password" 

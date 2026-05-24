@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 
 export default function AccountRecovery() {
     // Wizard Steps: 1 (Identity), 2 (Verification OTP), 3 (Secure Reset)
@@ -284,9 +285,9 @@ export default function AccountRecovery() {
                         </button>
                         
                         <div style={{ textAlign: 'center', marginTop: '1.2rem' }}>
-                            <a href="/" style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textDecoration: 'none', fontWeight: '600' }} className="brand-text">
+                            <Link href="/" style={{ fontSize: '0.78rem', color: 'var(--primary-neon)', textDecoration: 'none', fontWeight: '600' }} className="brand-text">
                                 Вернуться ко входу
-                            </a>
+                            </Link>
                         </div>
                     </form>
                 )}

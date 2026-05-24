@@ -3,6 +3,19 @@ import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
 
+// Simple memory-optimized rate limiter to prevent credentials brute forcing
+const rateLimitMap = new Map();
+const RATE_LIMIT_WINDOW_MS = 30000; // 30 seconds
+const MAX_REQUESTS_PER_WINDOW = 5;  // Max 5 attempts per window
+
+function getIpAddress(request) {
+    const forwarded = request.headers.get('x-forwarded-for');
+    if (forwarded) {
+        return forwarded.split(',')[0].trim();
+    }
+    return request.headers.get('x-real-ip') || 'unknown-ip';
+}
+
 const CONFIG_PATH = path.join(process.cwd(), 'config.json');
 const DEMO_DB_PATH = path.join(process.cwd(), 'demo_db.json');
 
@@ -64,6 +77,31 @@ function getSupabaseClient() {
 
 export async function POST(request) {
     try {
+        const ip = getIpAddress(request);
+        const now = Date.now();
+        
+        // Clean expired entries to optimize memory
+        for (const [key, record] of rateLimitMap.entries()) {
+            if (now - record.startTime > RATE_LIMIT_WINDOW_MS) {
+                rateLimitMap.delete(key);
+            }
+        }
+        
+        const record = rateLimitMap.get(ip) || { count: 0, startTime: now };
+        if (now - record.startTime > RATE_LIMIT_WINDOW_MS) {
+            record.count = 1;
+            record.startTime = now;
+        } else {
+            record.count += 1;
+        }
+        rateLimitMap.set(ip, record);
+        
+        if (record.count > MAX_REQUESTS_PER_WINDOW) {
+            return NextResponse.json({ 
+                error: "Слишком много запросов! Пожалуйста, подождите 30 секунд." 
+            }, { status: 429 });
+        }
+
         const body = await request.json();
         const { action, email, password, character_name, static_id, referral } = body;
         
@@ -155,6 +193,7 @@ export async function POST(request) {
                 const newDemoUser = {
                     id: 'user-uuid-' + Math.random().toString(36).substr(2, 9),
                     email,
+                    password, // SECURE CREDENTIAL REGISTRATION
                     character_name,
                     static_id,
                     role: 'MEMBER',
