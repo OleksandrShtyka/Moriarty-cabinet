@@ -1711,10 +1711,36 @@ input:checked + .slider:before {
     background: #FFFFFF;
 }
 
+/* Mobile Navigation Toggle Button - Hidden on Desktop */
+.mobile-nav-toggle {
+    display: none;
+    background: var(--panel-bg);
+    border: 1px solid rgba(179, 154, 116, 0.25);
+    color: var(--text-bright);
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.1rem;
+    transition: var(--transition-cyber);
+    box-shadow: var(--shadow-cyber);
+}
+
+.mobile-nav-toggle:hover {
+    background: var(--primary-neon);
+    color: #FFFFFF;
+    border-color: var(--primary-neon);
+}
+
 /* ==========================================================================
    Responsive Adaptability
    ========================================================================== */
 @media (max-width: 1024px) {
+    .mobile-nav-toggle {
+        display: flex;
+    }
     .app-container, .cabinet-wrapper {
         flex-direction: column;
         padding: 1rem;
