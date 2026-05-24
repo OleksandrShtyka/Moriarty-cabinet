@@ -1,9 +1,9 @@
-/* app/globals.css - 2026 Aero-Minimalist Swiss Private Wealth / Alabaster-Platinum Light Theme */
+/* app/globals.css - Premium Alabaster-Platinum Light Theme (Senior-Dev Layout Alignment) */
 
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
 
 :root {
-    --bg-void: #F8F8FA; /* Clean, warm alabaster-sand base */
+    --bg-void: #F8F8FA; /* Warm sand-alabaster luxury paper background */
     --panel-bg: rgba(255, 255, 255, 0.72); /* Exquisite frosted glass */
     --panel-bg-hover: rgba(255, 255, 255, 0.95);
     
@@ -37,16 +37,14 @@
 /* ==========================================================================
    Obsidian Base & Global Structure
    ========================================================================== */
-* {
-    margin: 0;
-    padding: 0;
+*, ::before, ::after {
     box-sizing: border-box;
-    font-family: var(--font-main);
-    scrollbar-width: thin;
-    scrollbar-color: var(--primary-neon) var(--bg-void);
 }
 
-body {
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: var(--font-main);
     background-color: var(--bg-void);
     color: var(--text-bright);
     min-height: 100vh;
@@ -57,6 +55,19 @@ body {
         radial-gradient(circle at 50% 30%, #F5F5F7 0%, #F8F8FA 85%);
     background-size: cover;
     background-attachment: fixed;
+}
+
+body * {
+    font-family: inherit;
+}
+
+/* 
+   SENIOR DEV SPECIFICITY FIX: 
+   Explicitly protect Font Awesome icons from CSS font overrides 
+*/
+.fa, .fas, .far, .fal, .fad, .fab, .fa-solid, .fa-regular, .fa-brands, [class^="fa-"], [class*=" fa-"] {
+    font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands", "Font Awesome 5 Free", sans-serif !important;
+    font-weight: 900;
 }
 
 /* Minimalist telemetry grid line overlay in soft sand-gray */
@@ -2019,4 +2030,141 @@ input:checked + .slider:before {
 
 .btn-logout:hover {
     color: var(--accent-rose);
+}
+
+/* ==========================================================================
+   SENIOR DEV RE-ALIGNMENT: FLOATING OVERLAY MODALS
+   ========================================================================== */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(28, 28, 36, 0.45); /* Soft-charcoal background backdrop */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.modal-overlay.active {
+    display: flex;
+    opacity: 1;
+}
+
+.modal-content {
+    background: #FFFFFF;
+    border: 1px solid rgba(179, 154, 116, 0.22);
+    border-radius: 16px;
+    padding: 2.25rem;
+    width: 100%;
+    max-width: 500px;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08), 0 0 1px rgba(179, 154, 116, 0.1);
+    transform: scale(0.9);
+    transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    color: #1C1C24;
+}
+
+.modal-overlay.active .modal-content {
+    transform: scale(1);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+    padding-bottom: 10px;
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #1C1C24;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.25rem;
+    cursor: pointer;
+    transition: var(--transition-cyber);
+}
+
+.modal-close:hover {
+    color: var(--accent-rose);
+    transform: rotate(90deg);
+}
+
+/* File Upload drag-and-drop widget styling */
+.file-upload-glow-wrap {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.015);
+    border: 1.5px dashed rgba(179, 154, 116, 0.25);
+    padding: 1.8rem;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    cursor: pointer;
+    transition: var(--transition-cyber);
+    text-align: center;
+}
+
+.file-upload-glow-wrap:hover {
+    border-color: var(--primary-neon);
+    background: #FFFFFF;
+    box-shadow: 0 4px 12px rgba(179, 154, 116, 0.05);
+}
+
+.file-upload-glow-wrap input[type="file"] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.file-upload-icon {
+    font-size: 2rem;
+    color: var(--primary-neon);
+}
+
+.divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    margin: 1rem 0;
+}
+
+.divider::before, .divider::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.divider:not(:empty)::before {
+    margin-right: .5em;
+}
+
+.divider:not(:empty)::after {
+    margin-left: .5em;
 }
